@@ -5,7 +5,7 @@ const appointmentSchema = new mongoose.Schema(
     appointmentNumber: {
       type: String,
       unique: true,
-      required: true
+      required: true,
       // Format: APT-YYYYMMDD-XXXXX
     },
     patient: { 
@@ -13,43 +13,18 @@ const appointmentSchema = new mongoose.Schema(
       ref: "Patient", 
       required: true 
     },
-    hospital: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "Hospital", 
-      required: true 
-    },
-    department: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "Department", 
-      required: true 
-    },
     doctor: { 
       type: mongoose.Schema.Types.ObjectId, 
-      ref: "Staff"  // Staff with role = DOCTOR
-    },
-    appointmentType: {
-      type: String,
-      enum: [
-        "CONSULTATION",
-        "FOLLOW_UP",
-        "EMERGENCY",
-        "SURGERY",
-        "CHECKUP",
-        "VACCINATION",
-        "LAB_TEST",
-        "SCAN",
-        "THERAPY",
-        "OTHER"
-      ],
-      default: "CONSULTATION"
+      ref: "Doctor", // changed from Staff to Doctor model
+      required: true
     },
     date: { 
       type: Date, 
       required: true 
     },
     timeSlot: {
-      start: String,  // e.g., "09:00"
-      end: String     // e.g., "09:30"
+      start: { type: String, required: true }, // e.g., "15:00"
+      end: { type: String, required: true }    // e.g., "15:15"
     },
     status: { 
       type: String, 
@@ -65,24 +40,30 @@ const appointmentSchema = new mongoose.Schema(
       ], 
       default: "BOOKED" 
     },
+    reason: {
+      type: String,
+      required: true
+    },
     priority: {
       type: String,
       enum: ["NORMAL", "URGENT", "EMERGENCY"],
       default: "NORMAL"
     },
     tokenNumber: Number,  // Queue token for the day
-    checkInTime: Date,
+    hospital: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Hospital"
+    },
+    department: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Department"
+    },
     consultationStartTime: Date,
     consultationEndTime: Date,
-    reason: {
-      type: String,
-      required: true
-    },
     symptoms: [String],
     notes: String,
-    patientNotes: String,  // Notes from patient
-    staffNotes: String,    // Notes from staff
-    cancellationReason: String,
+    patientNotes: String,
+    staffNotes: String,
     cancelledBy: {
       userId: mongoose.Schema.Types.ObjectId,
       userType: { type: String, enum: ["PATIENT", "STAFF"] }
@@ -125,12 +106,12 @@ appointmentSchema.index({ hospital: 1, department: 1, date: 1 });
 appointmentSchema.index({ status: 1, date: 1 });
 appointmentSchema.index({ date: 1, status: 1 });
 
-// Virtual for duration
+// Virtual for duration (minutes)
 appointmentSchema.virtual("duration").get(function() {
   if (this.consultationStartTime && this.consultationEndTime) {
-    return Math.floor((this.consultationEndTime - this.consultationStartTime) / (1000 * 60)); // in minutes
+    return Math.floor((this.consultationEndTime - this.consultationStartTime) / (1000 * 60));
   }
-  return null;
+  return 15; // default 15 minutes if not set
 });
 
 export default mongoose.model("Appointment", appointmentSchema);
