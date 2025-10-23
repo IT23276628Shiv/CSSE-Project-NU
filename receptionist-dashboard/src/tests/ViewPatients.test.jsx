@@ -1,10 +1,11 @@
-import React from "react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom";
+import { MemoryRouter } from "react-router-dom"; // ✅ add this
 import ViewPatients from "../pages/ViewPatients";
 import api from "../api/axiosInstance";
-import { vi } from "vitest";
 
-vi.mock("../../api/axiosInstance");
+vi.mock("../api/axiosInstance");
 
 const mockPatients = [
   {
@@ -17,16 +18,28 @@ const mockPatients = [
 ];
 
 describe("ViewPatients", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders table with patients", async () => {
     api.get.mockResolvedValueOnce({ data: mockPatients });
-    render(<ViewPatients />);
+    render(
+      <MemoryRouter>
+        <ViewPatients />
+      </MemoryRouter>
+    );
 
     expect(await screen.findByText("John Doe")).toBeInTheDocument();
   });
 
   it("opens modal on view click", async () => {
     api.get.mockResolvedValueOnce({ data: mockPatients });
-    render(<ViewPatients />);
+    render(
+      <MemoryRouter>
+        <ViewPatients />
+      </MemoryRouter>
+    );
 
     const viewButton = await screen.findByText("View");
     api.get.mockResolvedValueOnce({

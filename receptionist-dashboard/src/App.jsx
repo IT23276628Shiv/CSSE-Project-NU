@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import AddPatient from "./pages/AddPatients"; 
 import ViewPatients from "./pages/ViewPatients";
+import BookAppointment from "./pages/BookAppointment";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -36,6 +37,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <ViewPatients />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/book-Appointment"
+          element={
+            <PrivateRoute>
+              <BookAppointment />
             </PrivateRoute>
           }
         />

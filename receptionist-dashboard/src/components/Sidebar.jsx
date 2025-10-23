@@ -9,7 +9,7 @@ export default function Sidebar() {
     { name: "Add Patients", path: "/add-patient" },
     { name: "View Patients", path: "/Veiw-patients" },
     { name: "Doctors", path: "/doctors" },
-    { name: "Bookings", path: "/bookings" },
+    { name: "BookAppointments", path: "/book-Appointment" },
     { name: "ViewBookings", path: "/viewbookings" },
   ];
 
