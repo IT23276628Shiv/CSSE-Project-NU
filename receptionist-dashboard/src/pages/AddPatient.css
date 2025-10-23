@@ -1,0 +1,63 @@
+/* Container for content */
+.main-container {
+  margin: 2rem auto;
+  max-width: 900px;
+}
+
+/* Card style for the form */
+.patient-card {
+  background-color: #ffffff;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.patient-card:hover {
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Form headings */
+.patient-card h2 {
+  font-weight: 600;
+  color: #343a40;
+  margin-bottom: 1.5rem;
+}
+
+/* Buttons */
+.btn-custom {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: #fff;
+  transition: all 0.3s ease;
+}
+
+.btn-custom:hover {
+  background-color: #0056b3;
+  border-color: #0056b3;
+  color: #fff;
+}
+
+/* Generate ID button */
+.btn-generate {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: #fff;
+  transition: all 0.3s ease;
+}
+
+.btn-generate:hover {
+  background-color: #5a6268;
+  border-color: #5a6268;
+}
+
+/* Form labels */
+.form-label {
+  font-weight: 500;
+}
+
+/* Alert styling */
+.alert-custom {
+  border-radius: 8px;
+  font-weight: 500;
+}
