@@ -15,7 +15,7 @@ const AddPatient = () => {
     passwordHash: "",
     gender: "MALE",
     bloodGroup: "",
-    age: "",
+    dateOfBirth: "", // <-- Added DOB
     address: { street: "", city: "", district: "", province: "", postalCode: "", country: "Sri Lanka" },
   });
 
@@ -45,8 +45,8 @@ const AddPatient = () => {
     setLoading(true);
     setMessage("");
 
-    if (!formData.age || isNaN(Number(formData.age))) {
-      setMessage("Please enter a valid age");
+    if (!formData.dateOfBirth) {
+      setMessage("Please select a valid Date of Birth");
       setLoading(false);
       return;
     }
@@ -61,14 +61,20 @@ const AddPatient = () => {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("You must be logged in!");
 
-      await api.post("/patients", patientData, {
+      await api.post("/receptionist/patients", patientData, {
         headers: { "Content-Type": "multipart/form-data", Authorization: `Bearer ${token}` },
       });
 
       setMessage("Patient added successfully!");
       setFormData({
-        fullName: "", email: "", phone: "", healthCardId: generateHealthCardId(), passwordHash: "",
-        gender: "MALE", bloodGroup: "", age: "",
+        fullName: "",
+        email: "",
+        phone: "",
+        healthCardId: generateHealthCardId(),
+        passwordHash: "",
+        gender: "MALE",
+        bloodGroup: "",
+        dateOfBirth: "",
         address: { street: "", city: "", district: "", province: "", postalCode: "", country: "Sri Lanka" },
       });
       setAvatar(null);
@@ -148,8 +154,8 @@ const AddPatient = () => {
               <Row className="mb-3">
                 <Col md={6}>
                   <Form.Group>
-                    <Form.Label>Age</Form.Label>
-                    <Form.Control type="number" name="age" placeholder="Age" value={formData.age} onChange={handleChange} required />
+                    <Form.Label>Date of Birth</Form.Label>
+                    <Form.Control type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} required />
                   </Form.Group>
                 </Col>
                 <Col md={6}>

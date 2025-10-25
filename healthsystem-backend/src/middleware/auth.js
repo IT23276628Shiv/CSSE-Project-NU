@@ -2,6 +2,7 @@
 import jwt from "jsonwebtoken";
 import { Patient, Staff, Role, Permission } from "../models/index.js";
 import Receptionist from "../models/Receptionist/Receptionist.js"; // ✅ Import Receptionist model
+import Doctor from "../models/Doctor.js"; 
 
 /**
  * Main authentication middleware
@@ -46,6 +47,11 @@ export const authenticate = async (req, res, next) => {
       if (!user || user.isActive === false) {
         return res.status(401).json({ error: "STAFF not found or inactive" });
       }
+    }
+   else if (payload.userType === "DOCTOR") {
+      user = await Doctor.findById(payload.id);
+      if (!user)
+        return res.status(401).json({ error: "Doctor not found" });
     }
 
     // ❌ Unknown userType

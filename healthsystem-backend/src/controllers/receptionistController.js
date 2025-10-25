@@ -8,8 +8,9 @@ import Doctor from "../models/Doctor.js";
 
 export const addPatient = async (req, res) => {
   try {
-    const { fullName, email, phone, healthCardId, passwordHash, gender, bloodGroup,age, address } = req.body;
+    const { fullName, email, phone, healthCardId, passwordHash, gender, bloodGroup, dateOfBirth, address } = req.body;
 
+    // Check for existing patient
     const existing = await Patient.findOne({ $or: [{ email }, { healthCardId }] });
     if (existing) return res.status(400).json({ error: "Email or Health Card ID already exists" });
 
@@ -39,7 +40,7 @@ export const addPatient = async (req, res) => {
       passwordHash: hashedPassword,
       gender,
       bloodGroup,
-      age: age ? Number(age) : undefined,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined, // <-- fix here
       address: JSON.parse(address || "{}"),
       avatarUrl,
       qrCode: qrCodeData

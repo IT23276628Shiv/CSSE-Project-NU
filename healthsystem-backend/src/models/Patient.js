@@ -22,7 +22,6 @@ const patientSchema = new mongoose.Schema(
       unique: true 
     },
     dateOfBirth: Date,
-    age: Number,  // Calculated field
     gender: {
       type: String,
       enum: ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"]

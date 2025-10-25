@@ -27,7 +27,7 @@ import { attachSocket } from "./socket.js";
 import receptionistAuthRoutes from "./routes/receptionist/receptionistAuthRoutes.js";
 import receptionistRoutes from "./routes/receptionist/receptionistRoutes.js";
 import checkAppointmentRoutes from "./routes/receptionist/checkAppointment.js";
-
+import doctorAuthRoutes from "./routes/doctorAuthRoutes.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -98,6 +98,7 @@ app.use("/staff-assignment", staffAssignmentRoutes);
 app.use("/api/receptionist", receptionistAuthRoutes);
 app.use("/api/receptionist", receptionistRoutes);     // patients
 app.use("/api/receptionist", checkAppointmentRoutes);
+app.use("/api/doctor", doctorAuthRoutes);
 
 // 404 Handler
 app.use((req, res) => {

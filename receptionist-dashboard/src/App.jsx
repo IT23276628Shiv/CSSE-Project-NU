@@ -2,25 +2,35 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import AddPatient from "./pages/AddPatients"; 
+import AddPatient from "./pages/AddPatients";
 import ViewPatients from "./pages/ViewPatients";
 import BookAppointment from "./pages/BookAppointment";
 import CheckBooking from "./pages/checkBookings/CheckBooking";
+import DoctorDashboard from "./pages/doctor/DoctorDashboard"; // 👈 New doctor dashboard page
 
-function PrivateRoute({ children }) {
+// ✅ Role-based PrivateRoute
+function PrivateRoute({ children, allowedType }) {
   const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/" replace />;
+  const userType = localStorage.getItem("userType");
+
+  if (!token) return <Navigate to="/" replace />;
+  if (allowedType && userType !== allowedType) return <Navigate to="/unauthorized" replace />;
+
+  return children;
 }
 
 export default function App() {
   return (
     <Router>
       <Routes>
+        {/* 🔐 Common Login Page */}
         <Route path="/" element={<Login />} />
+
+        {/* 🧾 Receptionist Routes */}
         <Route
           path="/dashboard"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedType="RECEPTIONIST">
               <Dashboard />
             </PrivateRoute>
           }
@@ -28,7 +38,7 @@ export default function App() {
         <Route
           path="/add-patient"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedType="RECEPTIONIST">
               <AddPatient />
             </PrivateRoute>
           }
@@ -36,26 +46,42 @@ export default function App() {
         <Route
           path="/Veiw-patients"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedType="RECEPTIONIST">
               <ViewPatients />
             </PrivateRoute>
           }
         />
         <Route
-          path="/book-Appointment"
+          path="/book-appointment"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedType="RECEPTIONIST">
               <BookAppointment />
             </PrivateRoute>
           }
         />
-      <Route
-          path="/Check-bookings"
+        <Route
+          path="/check-bookings"
           element={
-            <PrivateRoute>
+            <PrivateRoute allowedType="RECEPTIONIST">
               <CheckBooking />
             </PrivateRoute>
           }
+        />
+
+        {/* 🩺 Doctor Routes */}
+        <Route
+          path="/doctor-dashboard"
+          element={
+            <PrivateRoute allowedType="DOCTOR">
+              <DoctorDashboard />
+            </PrivateRoute>
+          }
+        />
+
+        {/* 🚫 Unauthorized Page */}
+        <Route
+          path="/unauthorized"
+          element={<h2 style={{ textAlign: "center", marginTop: "50px" }}>Access Denied 🚫</h2>}
         />
       </Routes>
     </Router>

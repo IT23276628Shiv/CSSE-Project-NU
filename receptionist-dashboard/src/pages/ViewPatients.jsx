@@ -18,7 +18,7 @@ export default function ViewPatients() {
 
   const fetchPatients = async () => {
     try {
-      const res = await api.get("/patients");
+      const res = await api.get("/receptionist/patients");
       setPatients(res.data);
       setFilteredPatients(res.data);
     } catch (error) {
@@ -44,7 +44,7 @@ export default function ViewPatients() {
 
   const handleView = async (id) => {
     try {
-      const res = await api.get(`/patients/${id}`);
+      const res = await api.get(`/receptionist/patients/${id}`);
       setSelectedPatient(res.data);
       setShowModal(true);
     } catch (error) {
