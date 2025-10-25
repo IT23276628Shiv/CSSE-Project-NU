@@ -34,14 +34,31 @@ export default function CheckBooking() {
                     setSelectedBooking(booking);
                     setShowDoctorModal(true);
                   }}
+                  onBookingUpdated={async () => {
+                    // 🔄 Refetch data after confirm/cancel/reschedule
+                    if (!patientData?.healthId) return;
+                    const res = await fetch(`/api/receptionist/patient/${patientData.healthId}`);
+                    const data = await res.json();
+                    setPatientData(data.patient);
+                  }}
                 />
+
               )}
               {showDoctorModal && selectedBooking && (
-                <DoctorCheckModal
-                  booking={selectedBooking}
-                  onClose={() => setShowDoctorModal(false)}
-                  onBookingConfirmed={handleBookingConfirmed}
-                />
+            <DoctorCheckModal
+              booking={selectedBooking}
+              onClose={() => setShowDoctorModal(false)}
+              onBookingConfirmed={async () => {
+                // Refetch patient bookings after confirmation
+                if (!patientData?.healthId) return;
+                const res = await fetch(`/api/receptionist/patient/${patientData.healthId}`);
+                const data = await res.json();
+                setPatientData(data.patient);
+                
+                // Close modal if you want
+                setShowDoctorModal(false);
+              }}
+            />
               )}
             </div>
         </div>

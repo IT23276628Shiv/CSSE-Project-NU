@@ -17,8 +17,8 @@ const appointmentSchema = new mongoose.Schema(
     },
     doctor: { 
       type: mongoose.Schema.Types.ObjectId, 
-      ref: "Staff",
-      required: false  // ✅ FIXED: Made optional
+      ref: "Doctor",
+      required: false  
     },
     date: { 
       type: Date, 
@@ -55,12 +55,12 @@ const appointmentSchema = new mongoose.Schema(
     hospital: { 
       type: mongoose.Schema.Types.ObjectId, 
       ref: "Hospital",
-      required: true  // ✅ Ensure hospital is required
+      required: false  
     },
     department: { 
       type: mongoose.Schema.Types.ObjectId, 
       ref: "Department",
-      required: true  // ✅ Ensure department is required
+      required: false  
     },
     consultationStartTime: Date,
     consultationEndTime: Date,

@@ -20,6 +20,9 @@ export default function Login() {
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("name", res.data.receptionist.name);
       localStorage.setItem("userType", "RECEPTIONIST");
+      localStorage.setItem("userId", res.data.receptionist.id);
+      localStorage.setItem("userRole", res.data.receptionist.role);
+      localStorage.setItem("userName", res.data.receptionist.name);
 
       nav("/dashboard"); // ✅ receptionist dashboard
     } catch (receptionistError) {
