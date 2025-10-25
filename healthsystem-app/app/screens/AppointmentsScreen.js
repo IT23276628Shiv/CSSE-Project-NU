@@ -7,9 +7,14 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  TouchableOpacity
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  Platform,
+  StatusBar
 } from "react-native";
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from "@expo/vector-icons";
 import PCard from "../../src/components/PCard";
 import PButton from "../../src/components/PButton";
 import colors from "../../src/constants/colors";
@@ -17,10 +22,15 @@ import client from "../../src/api/client";
 
 export default function AppointmentsScreen() {
   const [items, setItems] = useState([]);
+  const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
   const [rescheduling, setRescheduling] = useState(false);
+  
+  // Filter states
+  const [activeFilter, setActiveFilter] = useState('ALL');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   
   // Reschedule modal state
   const [rescheduleModal, setRescheduleModal] = useState({
@@ -32,6 +42,15 @@ export default function AppointmentsScreen() {
   const [newDate, setNewDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  const FILTERS = [
+    { id: 'ALL', label: 'All', icon: 'list' },
+    { id: 'BOOKED', label: 'Booked', icon: 'calendar' },
+    { id: 'CONFIRMED', label: 'Confirmed', icon: 'checkmark-circle' },
+    { id: 'COMPLETED', label: 'Completed', icon: 'checkmark-done' },
+    { id: 'CANCELLED', label: 'Cancelled', icon: 'close-circle' },
+    { id: 'UPCOMING', label: 'Upcoming', icon: 'time' }
+  ];
+
   const loadAppointments = async (showRefresh = false) => {
     try {
       if (showRefresh) {
@@ -42,6 +61,7 @@ export default function AppointmentsScreen() {
       
       const { data } = await client.get("/appointments");
       setItems(data);
+      applyFilter(data, activeFilter);
     } catch (error) {
       console.error("Failed to load appointments:", error);
       
@@ -62,6 +82,35 @@ export default function AppointmentsScreen() {
   useEffect(() => { 
     loadAppointments(); 
   }, []);
+
+  const applyFilter = (appointments, filter) => {
+    let filtered = [...appointments];
+    const now = new Date();
+
+    switch (filter) {
+      case 'UPCOMING':
+        filtered = filtered.filter(apt => 
+          new Date(apt.date) > now && 
+          (apt.status === 'BOOKED' || apt.status === 'CONFIRMED')
+        );
+        break;
+      case 'ALL':
+        // Show all
+        break;
+      default:
+        filtered = filtered.filter(apt => apt.status === filter);
+    }
+
+    // Sort by date (most recent first)
+    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    setFilteredItems(filtered);
+  };
+
+  const handleFilterChange = (filterId) => {
+    setActiveFilter(filterId);
+    applyFilter(items, filterId);
+    setShowFilterMenu(false);
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -93,7 +142,33 @@ export default function AppointmentsScreen() {
     }
   };
 
-  const handleCancel = async (id, hospitalName) => {
+  const validateCancellation = (appointmentDate) => {
+    const now = new Date();
+    const appointment = new Date(appointmentDate);
+    const hoursDiff = (appointment - now) / (1000 * 60 * 60);
+
+    if (appointment <= now) {
+      return { valid: false, error: "Cannot cancel past appointments" };
+    }
+
+    if (hoursDiff < 24) {
+      return { 
+        valid: false, 
+        error: "Cannot cancel appointments less than 24 hours before scheduled time" 
+      };
+    }
+
+    return { valid: true, error: null };
+  };
+
+  const handleCancel = async (id, hospitalName, appointmentDate) => {
+    const validation = validateCancellation(appointmentDate);
+    
+    if (!validation.valid) {
+      Alert.alert("Cannot Cancel", validation.error);
+      return;
+    }
+
     Alert.alert(
       "Cancel Appointment",
       `Are you sure you want to cancel your appointment at ${hospitalName}?`,
@@ -106,7 +181,6 @@ export default function AppointmentsScreen() {
             try {
               setCancellingId(id);
               
-              // Make the cancel request
               const response = await client.patch(`/appointments/${id}/cancel`);
               
               if (response.status === 200) {
@@ -116,15 +190,12 @@ export default function AppointmentsScreen() {
             } catch (error) {
               console.error("Cancel failed:", error);
               
-              // Better error messages
               let errorMessage = "Failed to cancel appointment";
               
               if (error.response?.data?.error) {
                 errorMessage = error.response.data.error;
               } else if (error.request) {
                 errorMessage = "Network error. Please check your connection.";
-              } else if (error.message) {
-                errorMessage = error.message;
               }
               
               Alert.alert("Error", errorMessage);
@@ -137,13 +208,64 @@ export default function AppointmentsScreen() {
     );
   };
 
+  const validateReschedule = (currentDate, newDate) => {
+    const now = new Date();
+    const current = new Date(currentDate);
+    const scheduled = new Date(newDate);
+
+    // Can't reschedule past appointments
+    if (current <= now) {
+      return { valid: false, error: "Cannot reschedule past appointments" };
+    }
+
+    // New date must be in the future
+    if (scheduled <= now) {
+      return { valid: false, error: "New date must be in the future" };
+    }
+
+    // Must be at least 24 hours in advance
+    const hoursDiff = (scheduled - now) / (1000 * 60 * 60);
+    if (hoursDiff < 24) {
+      return { 
+        valid: false, 
+        error: "New appointment must be at least 24 hours from now" 
+      };
+    }
+
+    // Check business hours (8 AM - 8 PM)
+    const hour = scheduled.getHours();
+    if (hour < 8 || hour >= 20) {
+      return {
+        valid: false,
+        error: "Appointments must be between 8:00 AM and 8:00 PM"
+      };
+    }
+
+    // Can't be more than 3 months ahead
+    const maxDate = new Date();
+    maxDate.setMonth(maxDate.getMonth() + 3);
+    if (scheduled > maxDate) {
+      return {
+        valid: false,
+        error: "Cannot schedule more than 3 months in advance"
+      };
+    }
+
+    return { valid: true, error: null };
+  };
+
   const handleReschedule = (appointmentId, hospitalName, currentDate) => {
     const appointmentDate = new Date(currentDate);
     
-    // Set new date to at least tomorrow
+    const validation = validateReschedule(currentDate, appointmentDate);
+    if (!validation.valid) {
+      Alert.alert("Cannot Reschedule", validation.error);
+      return;
+    }
+    
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(9, 0, 0, 0); // Default to 9 AM
+    tomorrow.setHours(9, 0, 0, 0);
     
     setRescheduleModal({
       visible: true,
@@ -152,14 +274,14 @@ export default function AppointmentsScreen() {
       currentDate: appointmentDate
     });
     
-    // Set new date to tomorrow or current appointment date if it's in the future
     setNewDate(appointmentDate > tomorrow ? appointmentDate : tomorrow);
   };
 
   const confirmReschedule = async () => {
-    // Validate new date
-    if (newDate <= new Date()) {
-      Alert.alert("Invalid Date", "Please select a future date and time.");
+    const validation = validateReschedule(rescheduleModal.currentDate, newDate);
+    
+    if (!validation.valid) {
+      Alert.alert("Invalid Date", validation.error);
       return;
     }
 
@@ -188,10 +310,6 @@ export default function AppointmentsScreen() {
       
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
-      } else if (error.request) {
-        errorMessage = "Network error. Please check your connection.";
-      } else if (error.message) {
-        errorMessage = error.message;
       }
       
       Alert.alert("Error", errorMessage);
@@ -230,10 +348,10 @@ export default function AppointmentsScreen() {
     const { date, time } = formatDateTime(item.date);
     const statusColor = getStatusColor(item.status);
     const statusText = getStatusText(item.status);
-
-    // Extract hospital and department names safely
     const hospitalName = item.hospital?.name || item.hospital || "Unknown Hospital";
     const departmentName = item.department?.name || item.department || "General";
+    const isPast = new Date(item.date) < new Date();
+    const canModify = item.status === "BOOKED" && !isPast;
 
     return (
       <PCard style={{ marginBottom: 16, padding: 16 }}>
@@ -285,17 +403,24 @@ export default function AppointmentsScreen() {
           backgroundColor: `${colors.primary}08`,
           borderRadius: 8
         }}>
-          <View style={{ marginRight: 16 }}>
-            <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 2 }}>DATE</Text>
+          <Ionicons name="calendar-outline" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+          <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>{date}</Text>
+            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>{time}</Text>
           </View>
-          <View>
-            <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 2 }}>TIME</Text>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>{time}</Text>
-          </View>
+          {isPast && (
+            <View style={{ 
+              backgroundColor: colors.textMuted, 
+              paddingHorizontal: 8, 
+              paddingVertical: 4, 
+              borderRadius: 8 
+            }}>
+              <Text style={{ fontSize: 10, color: colors.white, fontWeight: "600" }}>PAST</Text>
+            </View>
+          )}
         </View>
 
-        {/* Doctor Info (if available) */}
+        {/* Doctor Info */}
         {item.doctor && (
           <View style={{ 
             flexDirection: 'row', 
@@ -313,12 +438,12 @@ export default function AppointmentsScreen() {
               marginRight: 12
             }}>
               <Text style={{ color: colors.white, fontWeight: '600', fontSize: 14 }}>
-                {item.doctor.fullName?.charAt(0) || item.doctor.name?.charAt(0) || 'D'}
+                {item.doctor.fullName?.charAt(0) || 'D'}
               </Text>
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>
-                Dr. {item.doctor.fullName || item.doctor.name || "Doctor"}
+                Dr. {item.doctor.fullName || "Doctor"}
               </Text>
               {item.doctor.specialization && (
                 <Text style={{ fontSize: 12, color: colors.textMuted }}>
@@ -339,12 +464,12 @@ export default function AppointmentsScreen() {
         )}
 
         {/* Actions */}
-        {item.status === "BOOKED" && (
+        {canModify && (
           <View style={{ marginTop: 16, flexDirection: 'row', gap: 12 }}>
             <PButton 
               title="Cancel" 
               type="outline" 
-              onPress={() => handleCancel(item._id, hospitalName)} 
+              onPress={() => handleCancel(item._id, hospitalName, item.date)} 
               style={{ flex: 1 }}
               loading={cancellingId === item._id}
               disabled={cancellingId !== null || rescheduling}
@@ -373,12 +498,97 @@ export default function AppointmentsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView 
+      style={{ 
+        flex: 1, 
+        backgroundColor: colors.background,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 6 : 0
+      }}
+    >
+      {/* Header with Filter */}
+      <View style={{ 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        padding: 16,
+        paddingBottom: 8
+      }}>
+        <View>
+          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.text }}>
+            Appointments
+          </Text>
+          <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 4 }}>
+            {filteredItems.length} {activeFilter === 'ALL' ? 'total' : activeFilter.toLowerCase()}
+          </Text>
+        </View>
+        
+        <TouchableOpacity
+          onPress={() => setShowFilterMenu(!showFilterMenu)}
+          style={{
+            backgroundColor: colors.primary,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 12,
+            flexDirection: 'row',
+            alignItems: 'center'
+          }}
+        >
+          <Ionicons name="filter" size={18} color={colors.white} />
+          <Text style={{ color: colors.white, marginLeft: 8, fontWeight: "600" }}>
+            Filter
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Filter Menu */}
+      {showFilterMenu && (
+        <View style={{ 
+          backgroundColor: colors.white, 
+          margin: 16,
+          marginTop: 0,
+          borderRadius: 12,
+          padding: 8,
+          shadowColor: "#000",
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 4
+        }}>
+          {FILTERS.map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              onPress={() => handleFilterChange(filter.id)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: 12,
+                borderRadius: 8,
+                backgroundColor: activeFilter === filter.id ? `${colors.primary}15` : 'transparent'
+              }}
+            >
+              <Ionicons 
+                name={filter.icon} 
+                size={20} 
+                color={activeFilter === filter.id ? colors.primary : colors.textMuted} 
+              />
+              <Text style={{ 
+                marginLeft: 12, 
+                fontSize: 14,
+                fontWeight: activeFilter === filter.id ? "600" : "400",
+                color: activeFilter === filter.id ? colors.primary : colors.text
+              }}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       <FlatList
-        data={items}
+        data={filteredItems}
         keyExtractor={(item) => item._id}
         renderItem={renderAppointmentItem}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingTop: 8 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -389,14 +599,16 @@ export default function AppointmentsScreen() {
         }
         ListEmptyComponent={
           <View style={{ alignItems: 'center', marginTop: 80, paddingHorizontal: 40 }}>
+            <Ionicons name="calendar-outline" size={64} color={colors.textMuted} />
             <Text style={{ 
               fontSize: 18, 
               fontWeight: "600", 
               color: colors.text, 
+              marginTop: 16,
               marginBottom: 8,
               textAlign: 'center'
             }}>
-              No Appointments
+              No {activeFilter === 'ALL' ? '' : activeFilter.toLowerCase()} appointments
             </Text>
             <Text style={{ 
               fontSize: 14, 
@@ -404,7 +616,10 @@ export default function AppointmentsScreen() {
               textAlign: 'center',
               lineHeight: 20
             }}>
-              You don't have any appointments scheduled yet. Book your first appointment to get started.
+              {activeFilter === 'ALL' 
+                ? "You don't have any appointments yet. Book your first appointment to get started."
+                : `You don't have any ${activeFilter.toLowerCase()} appointments.`
+              }
             </Text>
           </View>
         }
@@ -470,11 +685,14 @@ export default function AppointmentsScreen() {
                   borderColor: colors.border,
                   borderRadius: 12,
                   padding: 16,
-                  backgroundColor: colors.background
+                  backgroundColor: colors.background,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Text style={{ color: colors.text, fontSize: 14 }}>
+                <Text style={{ color: colors.text, fontSize: 14, flex: 1 }}>
                   {newDate.toLocaleString('en-US', {
                     weekday: 'short',
                     year: 'numeric',
@@ -484,7 +702,22 @@ export default function AppointmentsScreen() {
                     minute: '2-digit'
                   })}
                 </Text>
+                <Ionicons name="calendar" size={20} color={colors.primary} />
               </TouchableOpacity>
+            </View>
+
+            {/* Info Message */}
+            <View style={{ 
+              backgroundColor: '#FFF3CD', 
+              padding: 12, 
+              borderRadius: 8, 
+              marginBottom: 20,
+              borderLeftWidth: 4,
+              borderLeftColor: '#F59E0B'
+            }}>
+              <Text style={{ fontSize: 12, color: '#856404', lineHeight: 18 }}>
+                ⓘ New appointment must be at least 24 hours from now and between 8:00 AM - 8:00 PM
+              </Text>
             </View>
 
             {showDatePicker && (
@@ -522,6 +755,6 @@ export default function AppointmentsScreen() {
           </PCard>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }

@@ -17,18 +17,78 @@ import PButton from "../../src/components/PButton";
 import colors from "../../src/constants/colors";
 import client from "../../src/api/client";
 
+// ====== VALIDATION FUNCTIONS ======
+const getMinimumBookingDate = () => {
+  const minDate = new Date();
+  minDate.setHours(minDate.getHours() + 24); // 24 hours from now
+  return minDate;
+};
+
+const getMaximumBookingDate = () => {
+  const maxDate = new Date();
+  maxDate.setMonth(maxDate.getMonth() + 3); // 3 months ahead
+  return maxDate;
+};
+
+const validateAppointmentDate = (date) => {
+  if (!date) {
+    return { valid: false, error: "Please select a date and time" };
+  }
+
+  const selectedDate = new Date(date);
+  const now = new Date();
+  const minDate = getMinimumBookingDate();
+  const maxDate = getMaximumBookingDate();
+
+  // Check if date is in the past
+  if (selectedDate <= now) {
+    return {
+      valid: false,
+      error: "Cannot book appointments in the past"
+    };
+  }
+
+  // Check minimum 24 hours advance notice
+  if (selectedDate < minDate) {
+    return {
+      valid: false,
+      error: "Appointments must be booked at least 24 hours in advance"
+    };
+  }
+
+  // Check maximum booking window (3 months)
+  if (selectedDate > maxDate) {
+    return {
+      valid: false,
+      error: "Cannot book appointments more than 3 months in advance"
+    };
+  }
+
+  // Check if it's during reasonable hours (8 AM - 8 PM)
+  const hour = selectedDate.getHours();
+  if (hour < 8 || hour >= 20) {
+    return {
+      valid: false,
+      error: "Please select a time between 8:00 AM and 8:00 PM"
+    };
+  }
+
+  return { valid: true, error: null };
+};
+
 export default function BookAppointmentScreen() {
   const [hospitals, setHospitals] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [selectedHospital, setSelectedHospital] = useState(null);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
-  const [date, setDate] = useState(new Date(Date.now() + 24 * 60 * 60 * 1000)); // Tomorrow
+  const [date, setDate] = useState(getMinimumBookingDate()); // Set to 24h from now
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showHospitalPicker, setShowHospitalPicker] = useState(false);
   const [showDepartmentPicker, setShowDepartmentPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [notes, setNotes] = useState("");
+  const [dateError, setDateError] = useState(null);
 
   useEffect(() => {
     loadHospitals();
@@ -66,9 +126,36 @@ export default function BookAppointmentScreen() {
     }
   };
 
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    
+    if (selectedDate) {
+      setDate(selectedDate);
+      
+      // Validate immediately
+      const validation = validateAppointmentDate(selectedDate);
+      setDateError(validation.error);
+    }
+  };
+
   const submit = async () => {
+    // Validate all fields
     if (!selectedHospital || !selectedDepartment || !date) {
       Alert.alert("Missing Information", "Please fill in all required fields");
+      return;
+    }
+
+    // Validate date
+    const dateValidation = validateAppointmentDate(date);
+    if (!dateValidation.valid) {
+      setDateError(dateValidation.error);
+      Alert.alert("Invalid Date", dateValidation.error);
+      return;
+    }
+
+    // Validate notes length
+    if (notes.length > 500) {
+      Alert.alert("Notes Too Long", "Additional notes must be less than 500 characters");
       return;
     }
 
@@ -81,26 +168,27 @@ export default function BookAppointmentScreen() {
         notes: notes.trim() || undefined
       });
       
-      Alert.alert("Success", "Appointment booked successfully!", [
-        { text: "OK", onPress: () => {
-          setSelectedHospital(null);
-          setSelectedDepartment(null);
-          setNotes("");
-          setDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
-        }}
-      ]);
+      Alert.alert(
+        "Success", 
+        "Appointment booked successfully!", 
+        [
+          { 
+            text: "OK", 
+            onPress: () => {
+              setSelectedHospital(null);
+              setSelectedDepartment(null);
+              setNotes("");
+              setDate(getMinimumBookingDate());
+              setDateError(null);
+            }
+          }
+        ]
+      );
     } catch (error) {
       console.error("Booking error:", error);
       Alert.alert("Error", error?.response?.data?.error || "Booking failed");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const onDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setDate(selectedDate);
     }
   };
 
@@ -286,10 +374,25 @@ export default function BookAppointmentScreen() {
             <Text style={{ fontWeight: "700", color: colors.text, fontSize: 16, marginBottom: 8 }}>
               Date & Time *
             </Text>
+            
+            {/* Info Message */}
+            <View style={{ 
+              backgroundColor: '#FFF3CD', 
+              padding: 12, 
+              borderRadius: 8, 
+              marginBottom: 12,
+              borderLeftWidth: 4,
+              borderLeftColor: '#F59E0B'
+            }}>
+              <Text style={{ fontSize: 12, color: '#856404', lineHeight: 18 }}>
+                ⓘ Appointments must be booked at least 24 hours in advance
+              </Text>
+            </View>
+
             <TouchableOpacity
               style={{
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: dateError ? colors.danger : colors.border,
                 borderRadius: 12,
                 padding: 16,
                 backgroundColor: colors.background
@@ -301,13 +404,20 @@ export default function BookAppointmentScreen() {
               </Text>
             </TouchableOpacity>
             
+            {dateError && (
+              <Text style={{ color: colors.danger, fontSize: 12, marginTop: 8 }}>
+                {dateError}
+              </Text>
+            )}
+            
             {showDatePicker && (
               <DateTimePicker
                 value={date}
                 mode="datetime"
                 display="default"
-                onChange={onDateChange}
-                minimumDate={new Date()}
+                onChange={handleDateChange}
+                minimumDate={getMinimumBookingDate()}
+                maximumDate={getMaximumBookingDate()}
               />
             )}
           </PCard>
@@ -333,7 +443,16 @@ export default function BookAppointmentScreen() {
               }}
               multiline
               numberOfLines={4}
+              maxLength={500}
             />
+            <Text style={{ 
+              fontSize: 11, 
+              color: colors.textMuted, 
+              marginTop: 4, 
+              textAlign: 'right' 
+            }}>
+              {notes.length}/500
+            </Text>
           </PCard>
 
           {/* Submit Button */}
@@ -341,7 +460,7 @@ export default function BookAppointmentScreen() {
             title="Confirm Appointment" 
             onPress={submit} 
             loading={loading}
-            disabled={!selectedHospital || !selectedDepartment || !date}
+            disabled={!selectedHospital || !selectedDepartment || !date || !!dateError}
           />
         </ScrollView>
       )}

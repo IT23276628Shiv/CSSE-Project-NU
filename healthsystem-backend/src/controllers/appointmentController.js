@@ -1,6 +1,15 @@
+// healthsystem-backend/src/controllers/appointmentController.js
+// Updated with comprehensive date validation
+
 import Appointment from "../models/Appointment.js";
 import { Notification } from "../models/AuditNotification.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
+import {
+  validateObjectId,
+  validateAppointmentDate,
+  validateTextLength,
+  validateFields
+} from "../utils/validators.js";
 
 // Generate unique appointment number
 function generateAppointmentNumber() {
@@ -47,32 +56,33 @@ export const getById = asyncHandler(async (req, res) => {
 export const create = asyncHandler(async (req, res) => {
   const { hospital, department, doctor, date, notes } = req.body;
   
-  // Validation
-  if (!hospital || !department || !date) {
-    return res.status(400).json({ error: "hospital, department, date required" });
+  // Comprehensive validation
+  const validationResults = validateFields({
+    hospital: validateObjectId(hospital, "Hospital"),
+    department: validateObjectId(department, "Department"),
+    date: validateAppointmentDate(date),
+    notes: notes ? validateTextLength(notes, "Notes", 0, 500) : { valid: true, error: null }
+  });
+
+  if (!validationResults.valid) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: validationResults.errors
+    });
   }
 
-  // Validate ObjectIds
-  const mongoose = await import('mongoose');
-  if (!mongoose.default.Types.ObjectId.isValid(hospital)) {
-    return res.status(400).json({ error: "Invalid hospital ID" });
-  }
-  if (!mongoose.default.Types.ObjectId.isValid(department)) {
-    return res.status(400).json({ error: "Invalid department ID" });
+  // Validate doctor if provided
+  if (doctor) {
+    const doctorValidation = validateObjectId(doctor, "Doctor");
+    if (!doctorValidation.valid) {
+      return res.status(400).json({ error: doctorValidation.error });
+    }
   }
 
-  // Parse and validate date
+  // Parse appointment date
   const appointmentDate = new Date(date);
-  if (isNaN(appointmentDate.getTime())) {
-    return res.status(400).json({ error: "Invalid date format" });
-  }
 
-  // Check if date is in the future
-  if (appointmentDate < new Date()) {
-    return res.status(400).json({ error: "Appointment date must be in the future" });
-  }
-
-  // Check if slot is already booked (optional - simplified check)
+  // Check if slot is already booked (30-minute window)
   const existingAppointment = await Appointment.findOne({
     hospital,
     department,
@@ -136,7 +146,6 @@ export const create = asyncHandler(async (req, res) => {
     });
   } catch (notifError) {
     console.error("Notification creation failed:", notifError);
-    // Don't fail the appointment creation if notification fails
   }
 
   // Send real-time update if socket is available
@@ -149,14 +158,12 @@ export const create = asyncHandler(async (req, res) => {
 
 export const cancel = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  // Make reason optional with default fallback
   const reason = req.body?.reason || "Cancelled by patient";
   
   console.log("=== CANCEL REQUEST ===");
   console.log("Appointment ID:", id);
   console.log("User ID:", req.user.id);
   console.log("Reason:", reason);
-  console.log("Body:", req.body); // Debug
   
   try {
     // Find appointment
@@ -204,7 +211,7 @@ export const cancel = asyncHandler(async (req, res) => {
       { path: "doctor", select: "fullName specialization" }
     ]);
 
-    // Send real-time update (if socket is available)
+    // Send real-time update
     try {
       if (req.io) {
         req.io.to(req.user.id.toString()).emit("appointment:updated", appt);
@@ -230,8 +237,13 @@ export const reschedule = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { newDate } = req.body;
 
-  if (!newDate) {
-    return res.status(400).json({ error: "New date is required" });
+  // Validate new date
+  const dateValidation = validateAppointmentDate(newDate);
+  if (!dateValidation.valid) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: { date: dateValidation.error }
+    });
   }
 
   const appt = await Appointment.findOne({ _id: id, patient: req.user.id })
@@ -244,13 +256,6 @@ export const reschedule = asyncHandler(async (req, res) => {
   }
 
   const newAppointmentDate = new Date(newDate);
-  if (isNaN(newAppointmentDate.getTime())) {
-    return res.status(400).json({ error: "Invalid date format" });
-  }
-
-  if (newAppointmentDate < new Date()) {
-    return res.status(400).json({ error: "New date must be in the future" });
-  }
 
   // Check if new slot is available
   const conflicting = await Appointment.findOne({
