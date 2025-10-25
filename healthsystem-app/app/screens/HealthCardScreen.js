@@ -1,5 +1,5 @@
 // healthsystem-app/app/screens/HealthCardScreen.js
-// FIXED: Added pull-to-refresh functionality
+// UPDATED: Improved data fetching, state management, and refresh functionality
 
 import React, { useState, useEffect } from "react";
 import { 
@@ -26,7 +26,7 @@ export default function HealthCardScreen() {
   const { user, setUser } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     loadUserData();
   }, []);
@@ -35,9 +35,11 @@ export default function HealthCardScreen() {
     try {
       setLoading(true);
       const { data } = await client.get("/patients/me");
-      setUser(data);
+      console.log("Fetched user data:", data); // Debug log
+      setUser(prevUser => ({ ...prevUser, ...data }));
     } catch (error) {
       console.error("Failed to load user data:", error);
+      Alert.alert("Error", "Failed to load health card data");
     } finally {
       setLoading(false);
     }
@@ -48,7 +50,7 @@ export default function HealthCardScreen() {
     await loadUserData();
     setRefreshing(false);
   };
-  
+
   // Comprehensive health card data matching MongoDB structure
   const healthCardData = {
     _id: user?.id,
@@ -237,7 +239,6 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
 
   const getAllergiesDisplay = () => {
     if (!user?.allergies || user.allergies.length === 0) return null;
-    
     return user.allergies.map(a => {
       if (typeof a === 'string') return a;
       const allergen = a.allergen || 'Unknown';
@@ -248,7 +249,6 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
 
   const getChronicConditionsDisplay = () => {
     if (!user?.chronicConditions || user.chronicConditions.length === 0) return null;
-    
     return user.chronicConditions.map(c => {
       if (typeof c === 'string') return c;
       return c.condition || 'Unknown condition';
@@ -306,7 +306,7 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
           <View style={{ 
             flexDirection: 'row', 
             justifyContent: 'space-between', 
-            width: '100%', 
+            width: '100', 
             marginBottom: 20 
           }}>
             <View style={{ flex: 1 }}>
@@ -364,7 +364,7 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
 
           {/* Data Completeness Indicator */}
           <View style={{ 
-            width: '100%', 
+            width: '100', 
             backgroundColor: 'rgba(255,255,255,0.3)', 
             padding: 12, 
             borderRadius: 12,
