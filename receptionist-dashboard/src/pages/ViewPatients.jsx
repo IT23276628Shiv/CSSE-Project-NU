@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import api from "../api/axiosInstance";
 import { Modal, Button, Table, Spinner, Form, InputGroup } from "react-bootstrap";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
+import { useNavigate } from "react-router-dom";
+import { handleSearch, fetchPatients, handleView,handleDownload , handleViewHistory} from "../pages/functionsset/viewpatientfunction";
 
 export default function ViewPatients() {
   const [patients, setPatients] = useState([]);
@@ -12,88 +13,15 @@ export default function ViewPatients() {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const navigate = useNavigate();
+
   useEffect(() => {
-    fetchPatients();
+    fetchPatients(setPatients, setFilteredPatients, setLoading);
   }, []);
-
-  const fetchPatients = async () => {
-    try {
-      const res = await api.get("/receptionist/patients");
-      setPatients(res.data);
-      setFilteredPatients(res.data);
-    } catch (error) {
-      console.error("Error fetching patients:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
- const handleSearch = (e) => {
-  const value = e.target.value.toLowerCase();
-  setSearch(value);
-
-  const filtered = patients.filter(
-    (p) =>
-      (p.fullName && p.fullName.toLowerCase().includes(value)) ||
-      (p.email && p.email.toLowerCase().includes(value))
-  );
-
-  setFilteredPatients(filtered);
-};
-
-
-  const handleView = async (id) => {
-    try {
-      const res = await api.get(`/receptionist/patients/${id}`);
-      setSelectedPatient(res.data);
-      setShowModal(true);
-    } catch (error) {
-      console.error("Error loading patient:", error);
-    }
-  };
-
-const handleDownload = () => {
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  const img = new Image();
-
-  img.src = selectedPatient.qrCode;
-
-  img.onload = () => {
-    const padding = 100;
-    const textHeight = 40;
-    canvas.width = img.width + padding * 2;
-    canvas.height = img.height + textHeight * 3 + padding * 3;
-
-    // Background
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw name
-    ctx.fillStyle = "#000";
-    ctx.font = "bold 20px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(selectedPatient.fullName, canvas.width / 2, padding + 20);
-
-    // Draw health card ID
-    ctx.font = "16px Arial";
-    ctx.fillText("Health Card ID: " + selectedPatient.healthCardId, canvas.width / 2, padding + 50);
-
-    // Draw QR code below
-    ctx.drawImage(img, padding, padding + textHeight * 2, img.width, img.height);
-
-    // Convert canvas to image and download
-    const link = document.createElement("a");
-    link.download = `${selectedPatient.fullName}_QR.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  };
-};
-
 
   return (
     <div className="app-container">
-       <Navbar name={localStorage.getItem("name")} />
+      <Navbar name={localStorage.getItem("name")} />
       <div className="content-wrapper d-flex">
         <Sidebar />
         <div className="container mt-4">
@@ -105,10 +33,12 @@ const handleDownload = () => {
               type="text"
               placeholder="Search by name or email..."
               value={search}
-              onChange={handleSearch}
+              onChange={(e) =>
+                handleSearch(e, patients, setSearch, setFilteredPatients)
+              }
             />
             <Button variant="secondary" disabled>
-              <i className="bi bi-search"></i> {/* Optional Bootstrap icon */}
+              <i className="bi bi-search"></i>
             </Button>
           </InputGroup>
 
@@ -141,9 +71,20 @@ const handleDownload = () => {
                       <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => handleView(p._id)}
+                        onClick={() =>
+                          handleView(p._id, setSelectedPatient, setShowModal)
+                        }
                       >
                         View
+                      </Button>
+
+                       {/* 🆕 View History Button */}
+                      <Button
+                       variant="info"
+                       size="sm"
+                       onClick={() => handleViewHistory(navigate, p._id)}
+                      >
+                        View History
                       </Button>
                     </td>
                   </tr>
@@ -171,7 +112,10 @@ const handleDownload = () => {
                       width="150"
                     />
                     <div className="mt-3">
-                      <Button variant="success" onClick={handleDownload}>
+                      <Button
+                        variant="success"
+                        onClick={() => handleDownload(selectedPatient)}
+                      >
                         Download QR
                       </Button>
                     </div>

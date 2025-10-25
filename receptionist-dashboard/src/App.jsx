@@ -9,6 +9,8 @@ import CheckBooking from "./pages/checkBookings/CheckBooking";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard"; // 👈 New doctor dashboard page
 import AddDoctor from "./pages/AddDoctor";
 
+import PatientHistory from "./pages/PatientHistory";
+
 // ✅ Role-based PrivateRoute
 function PrivateRoute({ children, allowedType }) {
   const token = localStorage.getItem("token");
@@ -86,6 +88,9 @@ export default function App() {
             </PrivateRoute>
           }
         />
+
+
+        <Route path="/patients/:id/history" element={<PatientHistory />} />
 
         {/* 🚫 Unauthorized Page */}
         <Route
