@@ -8,6 +8,7 @@ export default function Sidebar() {
     { name: "Dashboard", path: "/dashboard" },
     { name: "Add Patients", path: "/add-patient" },
     { name: "View Patients", path: "/Veiw-patients" },
+    { name: "AddDoctors", path: "/Add-doctors" },
     { name: "Doctors", path: "/doctors" },
     { name: "BookAppointments", path: "/book-Appointment" },
     { name: "CheckBooking", path: "/Check-bookings" },

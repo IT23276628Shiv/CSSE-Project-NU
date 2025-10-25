@@ -28,6 +28,7 @@ import receptionistAuthRoutes from "./routes/receptionist/receptionistAuthRoutes
 import receptionistRoutes from "./routes/receptionist/receptionistRoutes.js";
 import checkAppointmentRoutes from "./routes/receptionist/checkAppointment.js";
 import doctorAuthRoutes from "./routes/doctorAuthRoutes.js";
+import receptionistAddDoctor from "./routes/receptionist/receptionistAddDoctorRoute.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -99,6 +100,7 @@ app.use("/api/receptionist", receptionistAuthRoutes);
 app.use("/api/receptionist", receptionistRoutes);     // patients
 app.use("/api/receptionist", checkAppointmentRoutes);
 app.use("/api/doctor", doctorAuthRoutes);
+app.use("/api/receptionistAddDoctor", receptionistAddDoctor);
 
 // 404 Handler
 app.use((req, res) => {

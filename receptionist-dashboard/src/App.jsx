@@ -7,6 +7,7 @@ import ViewPatients from "./pages/ViewPatients";
 import BookAppointment from "./pages/BookAppointment";
 import CheckBooking from "./pages/checkBookings/CheckBooking";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard"; // 👈 New doctor dashboard page
+import AddDoctor from "./pages/AddDoctor";
 
 // ✅ Role-based PrivateRoute
 function PrivateRoute({ children, allowedType }) {
@@ -64,6 +65,14 @@ export default function App() {
           element={
             <PrivateRoute allowedType="RECEPTIONIST">
               <CheckBooking />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/Add-doctors"
+          element={
+            <PrivateRoute allowedType="RECEPTIONIST">
+              <AddDoctor />
             </PrivateRoute>
           }
         />
