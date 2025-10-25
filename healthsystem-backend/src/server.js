@@ -29,6 +29,8 @@ import receptionistRoutes from "./routes/receptionist/receptionistRoutes.js";
 import checkAppointmentRoutes from "./routes/receptionist/checkAppointment.js";
 import doctorAuthRoutes from "./routes/doctorAuthRoutes.js";
 import receptionistAddDoctor from "./routes/receptionist/receptionistAddDoctorRoute.js";
+import doctorLeaveRoutes from "./routes/doctorLeaveRoutes.js";
+import doctorRoutes from "./routes/DoctorRoutes.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -99,9 +101,12 @@ app.use("/staff-assignment", staffAssignmentRoutes);
 app.use("/api/receptionist", receptionistAuthRoutes);
 app.use("/api/receptionist", receptionistRoutes);     // patients
 app.use("/api/receptionist", checkAppointmentRoutes);
-app.use("/api/doctor", doctorAuthRoutes);
 app.use("/api/receptionistAddDoctor", receptionistAddDoctor);
 
+//Doctor
+app.use("/api/doctor", doctorAuthRoutes);
+app.use("/api/doctor-leaves", doctorLeaveRoutes);
+app.use("/api/doctor", doctorRoutes);
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: "Endpoint not found" });
