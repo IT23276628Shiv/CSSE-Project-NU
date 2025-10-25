@@ -92,3 +92,69 @@ export const handleViewHistory = (navigate, id) => {
   navigate(`/patients/${id}/history`);
 };
 
+
+// api/patient.js
+
+export const fetchPatientHistory = async (id) => {
+  try {
+    const res = await fetch(`http://localhost:4000/receptionist/patients/${id}/history`);
+    if (!res.ok) throw new Error("Failed to fetch patient history");
+    return await res.json();
+  } catch (err) {
+    throw err;
+  }
+};
+
+
+// utils/format.js
+
+export const formatDate = (dateStr) => {
+  return dateStr
+    ? new Date(dateStr).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "—";
+};
+
+// src/pages/functionsset/viewpatientfunction.js
+import axios from "axios";
+
+/**
+ * ✅ Fetch patient full history (personal info, appointments, reports)
+ */
+
+
+/**
+ * ✅ Update patient details (only editable fields)
+ */
+export const updatePatient = async (id, updateData) => {
+  const res = await axios.put(`http://localhost:4000/receptionist/patients/${id}`, updateData);
+  return res.data;
+};
+
+
+
+/**
+ * Updates patient info and returns updated data.
+ * @param {string} id - Patient ID
+ * @param {object} formData - Form data to update
+ * @returns {object} - Updated patient data
+ */
+export const savePatientUpdates = async (id, formData) => {
+  try {
+    const allowedFields = ["fullName", "email", "phone", "gender", "bloodGroup", "address"];
+    const updateData = {};
+    allowedFields.forEach((key) => {
+      if (formData[key] !== undefined) updateData[key] = formData[key];
+    });
+
+    await updatePatient(id, updateData);
+    const updated = await fetchPatientHistory(id);
+    return updated;
+  } catch (err) {
+    console.error("Error updating patient:", err);
+    throw new Error("Failed to update patient details.");
+  }
+};
