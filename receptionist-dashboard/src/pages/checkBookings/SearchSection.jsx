@@ -11,7 +11,7 @@ export default function SearchSection({ setPatientData }) {
     if (!healthId) return;
     try {
       setLoading(true);
-      const res = await api.get(`/patient/${healthId}`);
+      const res = await api.get(`/receptionist/patient/${healthId}`);
       setPatientData(res.data.patient);
     } catch (err) {
       console.error(err);
@@ -34,7 +34,7 @@ export default function SearchSection({ setPatientData }) {
           // fetch patient data by scanned ID
           try {
             setLoading(true);
-            const res = await api.get(`/patient/${decodedText}`);
+            const res = await api.get(`/receptionist/patient/${decodedText}`);
             setPatientData(res.data.patient);
           } catch (err) {
             console.error(err);

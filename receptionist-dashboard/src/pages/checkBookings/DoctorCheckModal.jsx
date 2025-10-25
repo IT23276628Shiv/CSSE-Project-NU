@@ -1,82 +1,90 @@
-import React, { useState } from "react";
+// DoctorCheckModal.jsx
+import React, { useState, useEffect } from "react";
+import { Modal, Button, Spinner, Alert } from "react-bootstrap";
 import api from "../../api/axiosInstance";
 
 export default function DoctorCheckModal({ booking, onClose, onBookingConfirmed }) {
-  const [available, setAvailable] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
 
-  const checkAvailability = async () => {
-    try {
-      setLoading(true);
-      const res = await api.post("/doctor/check", {
-        doctorId: booking.doctor,
-        date: booking.date,
-        time: booking.time,
-      });
-      setAvailable(res.data.available);
-    } catch (err) {
-      console.error(err);
-      alert("Error checking doctor availability");
-    } finally {
-      setLoading(false);
+  // pre-fill date/time from booking (if available)
+  const [date, setDate] = useState(booking?.date ? new Date(booking.date).toISOString().slice(0,10) : "");
+  const [start, setStart] = useState(booking?.timeSlot?.start || "");
+  const [end, setEnd] = useState(booking?.timeSlot?.end || "");
+
+  useEffect(() => {
+    if (booking) {
+      setDate(booking.date ? new Date(booking.date).toISOString().slice(0,10) : "");
+      setStart(booking.timeSlot?.start || "");
+      setEnd(booking.timeSlot?.end || "");
+      setResult(null);
     }
-  };
+  }, [booking]);
 
-  const confirmBooking = async () => {
+  const handleCheckAvailability = async () => {
+    if (!booking?.doctor?._id || !date || !start || !end) {
+      setResult({ available: false, message: "Missing doctor/date/time" });
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
     try {
-      setLoading(true);
-      const res = await api.post("/booking/confirm", {
-        bookingId: booking._id,
+      // Use axios instance with baseURL '/api'
+      const res = await api.post("/receptionist/check-availability", {
+        doctorId: booking.doctor._id,
+        date: new Date(date).toISOString(),   // server expects ISO date
+        timeSlot: { start, end },
       });
-      alert(res.data.message);
-      onBookingConfirmed(); // Refresh bookings
-      onClose();
+
+      // res.data should be { available: boolean, message: string, ... }
+      setResult(res.data);
     } catch (err) {
-      console.error(err);
-      alert("Error confirming booking");
+      console.error("Check availability error:", err);
+      // show server error message when available
+      setResult({ available: false, message: err.response?.data?.message || "Server error" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="modal show d-block" tabIndex="-1">
-      <div className="modal-dialog">
-        <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title">Doctor Availability</h5>
-            <button type="button" className="btn-close" onClick={onClose}></button>
-          </div>
-          <div className="modal-body">
-            <p>
-              Doctor: <strong>{booking.doctorName || booking.doctor}</strong>
-              <br />
-              Date: {booking.date}
-              <br />
-              Time: {booking.time}
-            </p>
-            <p>
-              Status:{" "}
-              {available === null ? "Not checked" : available ? "Available ✅" : "Unavailable ❌"}
-            </p>
-          </div>
-          <div className="modal-footer">
-            {available === null && (
-              <button className="btn btn-primary" onClick={checkAvailability} disabled={loading}>
-                {loading ? "Checking..." : "Check Availability"}
-              </button>
-            )}
-            {available && (
-              <button className="btn btn-success" onClick={confirmBooking} disabled={loading}>
-                {loading ? "Confirming..." : "Confirm Appointment"}
-              </button>
-            )}
-            <button className="btn btn-secondary" onClick={onClose} disabled={loading}>
-              Close
-            </button>
-          </div>
+    <Modal show onHide={onClose} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Check Doctor Availability</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <p><strong>Doctor:</strong> {booking?.doctor?.firstName ?? booking?.doctor?._id}</p>
+
+        <label>Date</label>
+        <input className="form-control mb-2" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+
+        <label>Start</label>
+        <input className="form-control mb-2" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+
+        <label>End</label>
+        <input className="form-control mb-2" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+
+        <div className="text-center mt-2">
+          <Button variant="primary" onClick={handleCheckAvailability} disabled={loading}>
+            {loading ? <><Spinner animation="border" size="sm" /> Checking...</> : "Check"}
+          </Button>
         </div>
-      </div>
-    </div>
+
+        {result && (
+          <Alert className="mt-3 text-center" variant={result.available ? "success" : "danger"}>
+            {result.message}
+          </Alert>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onClose}>Close</Button>
+        {result?.available && (
+          <Button variant="success" onClick={() => { /* call confirm booking if you want */ }}>
+            Confirm Appointment
+          </Button>
+        )}
+      </Modal.Footer>
+    </Modal>
   );
 }

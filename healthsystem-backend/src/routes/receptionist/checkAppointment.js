@@ -12,7 +12,7 @@ const router = express.Router();
 router.get("/patient/:healthId", getPatientByHealthId);
 
 // POST check doctor availability
-router.post("/doctor/check", checkDoctorAvailability);
+router.post("/check-availability", checkDoctorAvailability);
 
 // POST confirm booking
 router.post("/booking/confirm", confirmBooking);

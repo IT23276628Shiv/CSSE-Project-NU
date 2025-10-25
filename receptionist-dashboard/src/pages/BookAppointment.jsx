@@ -29,7 +29,7 @@ export default function BookAppointment() {
   useEffect(() => {
     const fetchPatients = async () => {
       try {
-        const res = await api.get("/patients");
+        const res = await api.get("/receptionist/patients");
         setPatients(res.data);
       } catch (err) {
         console.error(err);
@@ -42,7 +42,7 @@ export default function BookAppointment() {
   useEffect(() => {
     const fetchDoctors = async () => {
       try {
-        const res = await api.get("/doctors");
+        const res = await api.get("/receptionist/doctors");
         setDoctors(res.data);
       } catch (err) {
         console.error(err);
@@ -59,7 +59,7 @@ export default function BookAppointment() {
       try {
         const dateStr = formatDateLocal(appointmentDate); // use local date
         const res = await api.get(
-          `/appointments/available-times?doctorId=${selectedDoctor._id}&date=${dateStr}`
+          `/receptionist/appointments/available-times?doctorId=${selectedDoctor._id}&date=${dateStr}`
         );
         setAvailableTimes(res.data);
       } catch (err) {
@@ -86,7 +86,7 @@ export default function BookAppointment() {
     };
 
     try {
-      await api.post("/appointments/book", appointmentData);
+      await api.post("/receptionist/appointments/book", appointmentData);
       alert("Appointment booked successfully!");
       // Reset form
       setSelectedPatient(null);

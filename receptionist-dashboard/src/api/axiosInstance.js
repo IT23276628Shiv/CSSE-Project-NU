@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:4000/api/receptionist", // backend receptionist route
+  baseURL: "http://localhost:4000/api", // backend receptionist route
   timeout: 10000,
 });
 
