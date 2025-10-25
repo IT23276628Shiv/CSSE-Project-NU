@@ -1,3 +1,6 @@
+// healthsystem-app/app/screens/ProfileScreen.js
+// FIXED: Added validation for phone, NIC, and date of birth
+
 import React, { useEffect, useState } from "react";
 import { 
   View, 
@@ -22,6 +25,61 @@ import * as ImagePicker from "expo-image-picker";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
+// Validation functions
+const validatePhone = (phone) => {
+  if (!phone) return { valid: true, error: null }; // Optional field
+  const phoneRegex = /^0\d{9}$/;
+  if (!phoneRegex.test(phone)) {
+    return { valid: false, error: "Phone must be 10 digits starting with 0" };
+  }
+  return { valid: true, error: null };
+};
+
+const validateNIC = (nic) => {
+  if (!nic) return { valid: true, error: null }; // Optional field
+  const nicRegex = /^(\d{9}[vVxX]|\d{12})$/;
+  if (!nicRegex.test(nic)) {
+    return { valid: false, error: "NIC must be 9 digits + V/X or 12 digits" };
+  }
+  return { valid: true, error: null };
+};
+
+const validateDateOfBirth = (dob) => {
+  if (!dob) return { valid: true, error: null }; // Optional field
+  
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(dob)) {
+    return { valid: false, error: "Date must be in YYYY-MM-DD format" };
+  }
+  
+  const date = new Date(dob);
+  const now = new Date();
+  
+  if (isNaN(date.getTime())) {
+    return { valid: false, error: "Invalid date" };
+  }
+  
+  if (date > now) {
+    return { valid: false, error: "Date of birth cannot be in the future" };
+  }
+  
+  const age = now.getFullYear() - date.getFullYear();
+  if (age > 150) {
+    return { valid: false, error: "Invalid date of birth" };
+  }
+  
+  return { valid: true, error: null };
+};
+
+const validateEmergencyContact = (contact) => {
+  if (!contact) return { valid: true, error: null }; // Optional field
+  const phoneRegex = /^0\d{9}$/;
+  if (!phoneRegex.test(contact)) {
+    return { valid: false, error: "Emergency contact must be 10 digits starting with 0" };
+  }
+  return { valid: true, error: null };
+};
+
 export default function ProfileScreen() {
   const { user, setUser, logout } = useAuth();
   const [form, setForm] = useState({ 
@@ -31,12 +89,14 @@ export default function ProfileScreen() {
     bloodGroup: "", 
     allergies: [],
     emergencyContact: "",
-    dateOfBirth: ""
+    dateOfBirth: "",
+    nic: ""
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showBloodGroupPicker, setShowBloodGroupPicker] = useState(false);
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     loadProfile();
@@ -49,32 +109,84 @@ export default function ProfileScreen() {
       setForm({
         fullName: data.fullName || "",
         phone: data.phone || "",
-        address: data.address || "",
+        address: data.address?.street || "",
         bloodGroup: data.bloodGroup || "",
         allergies: data.allergies || [],
-        emergencyContact: data.emergencyContact || "",
-        dateOfBirth: data.dateOfBirth || "",
+        emergencyContact: data.emergencyContact?.phone || "",
+        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString().split('T')[0] : "",
+        nic: data.nic || ""
       });
     } catch (error) {
-      Alert.alert("Error", "Failed to load profile");
+      console.error("Failed to load profile:", error);
+      Alert.alert("Error", error.message || "Failed to load profile");
     } finally {
       setLoading(false);
     }
   };
 
-  const save = async () => {
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Validate full name (required)
     if (!form.fullName.trim()) {
-      Alert.alert("Error", "Please enter your full name");
+      newErrors.fullName = "Full name is required";
+    }
+
+    // Validate phone
+    const phoneValidation = validatePhone(form.phone);
+    if (!phoneValidation.valid) {
+      newErrors.phone = phoneValidation.error;
+    }
+
+    // Validate NIC
+    const nicValidation = validateNIC(form.nic);
+    if (!nicValidation.valid) {
+      newErrors.nic = nicValidation.error;
+    }
+
+    // Validate date of birth
+    const dobValidation = validateDateOfBirth(form.dateOfBirth);
+    if (!dobValidation.valid) {
+      newErrors.dateOfBirth = dobValidation.error;
+    }
+
+    // Validate emergency contact
+    const emergencyValidation = validateEmergencyContact(form.emergencyContact);
+    if (!emergencyValidation.valid) {
+      newErrors.emergencyContact = emergencyValidation.error;
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const save = async () => {
+    // Validate form
+    if (!validateForm()) {
+      Alert.alert("Validation Error", "Please correct the errors and try again");
       return;
     }
 
     setSaving(true);
     try {
-      const { data } = await client.patch("/patients/me", form);
+      const payload = {
+        fullName: form.fullName.trim(),
+        phone: form.phone.trim(),
+        address: form.address.trim(),
+        bloodGroup: form.bloodGroup,
+        emergencyContact: {
+          phone: form.emergencyContact.trim()
+        },
+        dateOfBirth: form.dateOfBirth || undefined,
+        nic: form.nic.trim() || undefined
+      };
+
+      const { data } = await client.patch("/patients/me", payload);
       setUser(data);
       Alert.alert("Success", "Profile updated successfully");
     } catch (error) {
-      Alert.alert("Error", "Failed to save profile");
+      console.error("Save error:", error);
+      Alert.alert("Error", error.message || "Failed to save profile");
     } finally {
       setSaving(false);
     }
@@ -91,6 +203,7 @@ export default function ProfileScreen() {
       quality: 0.8,
       allowsEditing: true,
       aspect: [1, 1],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
     });
 
     if (result.canceled) return;
@@ -111,7 +224,8 @@ export default function ProfileScreen() {
       setUser(data);
       Alert.alert("Success", "Profile picture updated");
     } catch (error) {
-      Alert.alert("Error", "Failed to upload image");
+      console.error("Upload error:", error);
+      Alert.alert("Error", error.message || "Failed to upload image");
     } finally {
       setUploading(false);
     }
@@ -137,6 +251,11 @@ export default function ProfileScreen() {
     fontSize: 16,
     color: colors.text,
     backgroundColor: colors.background
+  };
+
+  const errorInputStyle = {
+    ...inputStyle,
+    borderColor: colors.danger
   };
 
   if (loading) {
@@ -220,6 +339,19 @@ export default function ProfileScreen() {
               <Text style={{ fontSize: 14, color: colors.textMuted }}>
                 {user?.email || "No email provided"}
               </Text>
+              {user?.healthCardId && (
+                <View style={{ 
+                  marginTop: 8, 
+                  backgroundColor: `${colors.primary}15`,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 12
+                }}>
+                  <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "600" }}>
+                    ID: {user.healthCardId}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <PButton 
@@ -249,11 +381,22 @@ export default function ProfileScreen() {
               <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Full Name *</Text>
               <TextInput 
                 value={form.fullName} 
-                onChangeText={(t) => setForm((s) => ({ ...s, fullName: t }))} 
-                style={inputStyle}
+                onChangeText={(t) => {
+                  setForm((s) => ({ ...s, fullName: t }));
+                  if (errors.fullName) setErrors((e) => ({ ...e, fullName: null }));
+                }}
+                style={errors.fullName ? errorInputStyle : inputStyle}
                 placeholder="Enter your full name"
                 placeholderTextColor={colors.textMuted}
               />
+              {errors.fullName && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                  <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 4 }}>
+                    {errors.fullName}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Phone */}
@@ -261,12 +404,49 @@ export default function ProfileScreen() {
               <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Phone</Text>
               <TextInput 
                 value={form.phone} 
-                onChangeText={(t) => setForm((s) => ({ ...s, phone: t }))} 
-                style={inputStyle}
-                placeholder="Enter your phone number"
+                onChangeText={(t) => {
+                  setForm((s) => ({ ...s, phone: t }));
+                  if (errors.phone) setErrors((e) => ({ ...e, phone: null }));
+                }}
+                style={errors.phone ? errorInputStyle : inputStyle}
+                placeholder="0771234567"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="phone-pad"
+                maxLength={10}
               />
+              {errors.phone && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                  <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 4 }}>
+                    {errors.phone}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* NIC */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>NIC</Text>
+              <TextInput 
+                value={form.nic} 
+                onChangeText={(t) => {
+                  setForm((s) => ({ ...s, nic: t.toUpperCase() }));
+                  if (errors.nic) setErrors((e) => ({ ...e, nic: null }));
+                }}
+                style={errors.nic ? errorInputStyle : inputStyle}
+                placeholder="123456789V or 123456789012"
+                placeholderTextColor={colors.textMuted}
+                maxLength={12}
+                autoCapitalize="characters"
+              />
+              {errors.nic && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                  <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 4 }}>
+                    {errors.nic}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Date of Birth */}
@@ -274,11 +454,23 @@ export default function ProfileScreen() {
               <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Date of Birth</Text>
               <TextInput 
                 value={form.dateOfBirth} 
-                onChangeText={(t) => setForm((s) => ({ ...s, dateOfBirth: t }))} 
-                style={inputStyle}
-                placeholder="YYYY-MM-DD"
+                onChangeText={(t) => {
+                  setForm((s) => ({ ...s, dateOfBirth: t }));
+                  if (errors.dateOfBirth) setErrors((e) => ({ ...e, dateOfBirth: null }));
+                }}
+                style={errors.dateOfBirth ? errorInputStyle : inputStyle}
+                placeholder="YYYY-MM-DD (e.g., 1990-01-15)"
                 placeholderTextColor={colors.textMuted}
+                maxLength={10}
               />
+              {errors.dateOfBirth && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                  <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 4 }}>
+                    {errors.dateOfBirth}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Address */}
@@ -351,22 +543,35 @@ export default function ProfileScreen() {
 
             {/* Emergency Contact */}
             <View style={{ marginBottom: 24 }}>
-              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Emergency Contact</Text>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Emergency Contact Phone</Text>
               <TextInput 
                 value={form.emergencyContact} 
-                onChangeText={(t) => setForm((s) => ({ ...s, emergencyContact: t }))} 
-                style={inputStyle}
-                placeholder="Emergency contact number"
+                onChangeText={(t) => {
+                  setForm((s) => ({ ...s, emergencyContact: t }));
+                  if (errors.emergencyContact) setErrors((e) => ({ ...e, emergencyContact: null }));
+                }}
+                style={errors.emergencyContact ? errorInputStyle : inputStyle}
+                placeholder="0771234567"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="phone-pad"
+                maxLength={10}
               />
+              {errors.emergencyContact && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                  <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 4 }}>
+                    {errors.emergencyContact}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Save Button */}
             <PButton 
-              title="Save Changes" 
+              title={saving ? "Saving..." : "Save Changes"}
               onPress={save} 
               loading={saving}
+              disabled={saving}
               style={{ marginBottom: 12 }}
             />
 

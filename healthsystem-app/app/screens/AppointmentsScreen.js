@@ -1,3 +1,6 @@
+// healthsystem-app/app/screens/AppointmentsScreen.js
+// FIXED: Improved timezone handling, better date validation, error messages
+
 import React, { useEffect, useState } from "react";
 import { 
   View, 
@@ -19,6 +22,13 @@ import PCard from "../../src/components/PCard";
 import PButton from "../../src/components/PButton";
 import colors from "../../src/constants/colors";
 import client from "../../src/api/client";
+
+// Normalize dates to minute precision to avoid timezone issues
+const normalizeDate = (date) => {
+  const normalized = new Date(date);
+  normalized.setSeconds(0, 0);
+  return normalized;
+};
 
 export default function AppointmentsScreen() {
   const [items, setItems] = useState([]);
@@ -64,15 +74,7 @@ export default function AppointmentsScreen() {
       applyFilter(data, activeFilter);
     } catch (error) {
       console.error("Failed to load appointments:", error);
-      
-      let errorMessage = "Failed to load appointments";
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.request) {
-        errorMessage = "Network error. Please check your connection.";
-      }
-      
-      Alert.alert("Error", errorMessage);
+      Alert.alert("Error", error.message || "Failed to load appointments");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -85,12 +87,12 @@ export default function AppointmentsScreen() {
 
   const applyFilter = (appointments, filter) => {
     let filtered = [...appointments];
-    const now = new Date();
+    const now = normalizeDate(new Date());
 
     switch (filter) {
       case 'UPCOMING':
         filtered = filtered.filter(apt => 
-          new Date(apt.date) > now && 
+          normalizeDate(apt.date) > now && 
           (apt.status === 'BOOKED' || apt.status === 'CONFIRMED')
         );
         break;
@@ -143,8 +145,8 @@ export default function AppointmentsScreen() {
   };
 
   const validateCancellation = (appointmentDate) => {
-    const now = new Date();
-    const appointment = new Date(appointmentDate);
+    const now = normalizeDate(new Date());
+    const appointment = normalizeDate(appointmentDate);
     const hoursDiff = (appointment - now) / (1000 * 60 * 60);
 
     if (appointment <= now) {
@@ -180,7 +182,6 @@ export default function AppointmentsScreen() {
           onPress: async () => {
             try {
               setCancellingId(id);
-              
               const response = await client.patch(`/appointments/${id}/cancel`);
               
               if (response.status === 200) {
@@ -189,16 +190,7 @@ export default function AppointmentsScreen() {
               }
             } catch (error) {
               console.error("Cancel failed:", error);
-              
-              let errorMessage = "Failed to cancel appointment";
-              
-              if (error.response?.data?.error) {
-                errorMessage = error.response.data.error;
-              } else if (error.request) {
-                errorMessage = "Network error. Please check your connection.";
-              }
-              
-              Alert.alert("Error", errorMessage);
+              Alert.alert("Error", error.message || "Failed to cancel appointment");
             } finally {
               setCancellingId(null);
             }
@@ -209,9 +201,9 @@ export default function AppointmentsScreen() {
   };
 
   const validateReschedule = (currentDate, newDate) => {
-    const now = new Date();
-    const current = new Date(currentDate);
-    const scheduled = new Date(newDate);
+    const now = normalizeDate(new Date());
+    const current = normalizeDate(currentDate);
+    const scheduled = normalizeDate(newDate);
 
     // Can't reschedule past appointments
     if (current <= now) {
@@ -242,7 +234,7 @@ export default function AppointmentsScreen() {
     }
 
     // Can't be more than 3 months ahead
-    const maxDate = new Date();
+    const maxDate = new Date(now);
     maxDate.setMonth(maxDate.getMonth() + 3);
     if (scheduled > maxDate) {
       return {
@@ -255,7 +247,7 @@ export default function AppointmentsScreen() {
   };
 
   const handleReschedule = (appointmentId, hospitalName, currentDate) => {
-    const appointmentDate = new Date(currentDate);
+    const appointmentDate = normalizeDate(currentDate);
     
     const validation = validateReschedule(currentDate, appointmentDate);
     if (!validation.valid) {
@@ -305,14 +297,7 @@ export default function AppointmentsScreen() {
       }
     } catch (error) {
       console.error("Reschedule failed:", error);
-      
-      let errorMessage = "Failed to reschedule appointment";
-      
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      }
-      
-      Alert.alert("Error", errorMessage);
+      Alert.alert("Error", error.message || "Failed to reschedule appointment");
     } finally {
       setRescheduling(false);
     }
@@ -350,7 +335,7 @@ export default function AppointmentsScreen() {
     const statusText = getStatusText(item.status);
     const hospitalName = item.hospital?.name || item.hospital || "Unknown Hospital";
     const departmentName = item.department?.name || item.department || "General";
-    const isPast = new Date(item.date) < new Date();
+    const isPast = normalizeDate(item.date) < normalizeDate(new Date());
     const canModify = item.status === "BOOKED" && !isPast;
 
     return (
@@ -745,11 +730,12 @@ export default function AppointmentsScreen() {
                 disabled={rescheduling}
               />
               <PButton
-                title="Confirm"
+                title={rescheduling ? "Saving..." : "Confirm"}
                 type="primary"
                 onPress={confirmReschedule}
                 style={{ flex: 1 }}
                 loading={rescheduling}
+                disabled={rescheduling}
               />
             </View>
           </PCard>
