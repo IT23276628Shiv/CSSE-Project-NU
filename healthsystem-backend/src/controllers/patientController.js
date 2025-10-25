@@ -1,10 +1,17 @@
-// Updated patient controller with multi-role support
-// Path: src/controllers/patientController.js
+// healthsystem-backend/src/controllers/patientController.js
+// Updated with comprehensive validation
 
 import { Patient, AuditLog } from "../models/index.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import multer from "multer";
 import cloudinary from "../config/cloudinary.js";
+import {
+  validatePhone,
+  validateFullName,
+  validateDateOfBirth,
+  validateBloodGroup,
+  validateFields
+} from "../utils/validators.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 export const avatarUploadMiddleware = upload.single("file");
@@ -44,7 +51,8 @@ export const updateMe = asyncHandler(async (req, res) => {
     "preferredLanguage",
     "occupation",
     "maritalStatus",
-    "preferredHospital"
+    "preferredHospital",
+    "dateOfBirth"
   ];
 
   const patch = {};
@@ -53,6 +61,47 @@ export const updateMe = asyncHandler(async (req, res) => {
       patch[key] = req.body[key];
     }
   });
+
+  // Validate fields that are being updated
+  const validations = {};
+  
+  if (patch.fullName) {
+    validations.fullName = validateFullName(patch.fullName);
+  }
+  
+  if (patch.phone) {
+    validations.phone = validatePhone(patch.phone);
+  }
+  
+  if (patch.alternatePhone) {
+    validations.alternatePhone = validatePhone(patch.alternatePhone);
+  }
+  
+  if (patch.bloodGroup) {
+    validations.bloodGroup = validateBloodGroup(patch.bloodGroup);
+  }
+  
+  if (patch.dateOfBirth) {
+    validations.dateOfBirth = validateDateOfBirth(patch.dateOfBirth);
+  }
+  
+  // Validate emergency contact phone if provided
+  if (patch.emergencyContact && typeof patch.emergencyContact === 'object') {
+    if (patch.emergencyContact.phone) {
+      validations.emergencyContactPhone = validatePhone(patch.emergencyContact.phone);
+    }
+  } else if (typeof patch.emergencyContact === 'string') {
+    validations.emergencyContact = validatePhone(patch.emergencyContact);
+  }
+
+  const validationResults = validateFields(validations);
+  
+  if (!validationResults.valid) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: validationResults.errors
+    });
+  }
 
   const updated = await Patient.findByIdAndUpdate(req.user.id, patch, { 
     new: true,
@@ -86,6 +135,22 @@ export const updateMe = asyncHandler(async (req, res) => {
 export const uploadAvatar = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file provided" });
+  }
+
+  // Validate file type
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+  if (!allowedTypes.includes(req.file.mimetype)) {
+    return res.status(400).json({ 
+      error: "Invalid file type. Only JPEG, PNG, and WebP images are allowed" 
+    });
+  }
+
+  // Validate file size (max 5MB)
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  if (req.file.size > maxSize) {
+    return res.status(400).json({ 
+      error: "File too large. Maximum size is 5MB" 
+    });
   }
 
   // Convert buffer to base64
@@ -226,7 +291,8 @@ export const updatePatient = asyncHandler(async (req, res) => {
     "insuranceInfo",
     "notes",
     "isActive",
-    "accountStatus"
+    "accountStatus",
+    "dateOfBirth"
   ];
 
   const patch = {};
@@ -235,6 +301,34 @@ export const updatePatient = asyncHandler(async (req, res) => {
       patch[key] = req.body[key];
     }
   });
+
+  // Validate fields that are being updated
+  const validations = {};
+  
+  if (patch.fullName) {
+    validations.fullName = validateFullName(patch.fullName);
+  }
+  
+  if (patch.phone) {
+    validations.phone = validatePhone(patch.phone);
+  }
+  
+  if (patch.bloodGroup) {
+    validations.bloodGroup = validateBloodGroup(patch.bloodGroup);
+  }
+  
+  if (patch.dateOfBirth) {
+    validations.dateOfBirth = validateDateOfBirth(patch.dateOfBirth);
+  }
+
+  const validationResults = validateFields(validations);
+  
+  if (!validationResults.valid) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: validationResults.errors
+    });
+  }
 
   const updated = await Patient.findByIdAndUpdate(req.params.id, patch, {
     new: true,
