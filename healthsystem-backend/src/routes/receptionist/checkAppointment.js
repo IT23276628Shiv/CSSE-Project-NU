@@ -2,8 +2,10 @@
 import express from "express";
 import {
   getPatientByHealthId,
-  checkDoctorAvailability,
+  verifyDoctorBeforeAppointment,
   confirmBooking,
+  cancelBooking ,
+  rescheduleBooking ,
 } from "../../controllers/checkAppointmentController.js";
 
 const router = express.Router();
@@ -12,9 +14,13 @@ const router = express.Router();
 router.get("/patient/:healthId", getPatientByHealthId);
 
 // POST check doctor availability
-router.post("/check-availability", checkDoctorAvailability);
-
+router.post("/check-availability", verifyDoctorBeforeAppointment);
 // POST confirm booking
 router.post("/booking/confirm", confirmBooking);
+
+// POST /api/receptionist/booking/cancel
+router.post("/booking/cancel", cancelBooking);
+
+router.post("/booking/reschedule", rescheduleBooking);
 
 export default router;

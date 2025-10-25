@@ -16,7 +16,7 @@ export const getPatientByHealthId = async (req, res) => {
 
     // fetch all bookings for this patient
     const bookings = await Booking.find({ patient: patient._id })
-      .populate("doctor", "fullName")
+      .populate("doctor", "firstName lastName")
       .lean();
 
     // Calculate age safely
@@ -45,70 +45,10 @@ export const getPatientByHealthId = async (req, res) => {
 
 
 // Check doctor availability for a specific booking
-// export const checkDoctorAvailability = async (req, res) => {
-//   try {
-//     const { doctorId, date, timeSlot } = req.body;
 
-//     // 🧩 Validate input
-//     if (!doctorId || !date || !timeSlot?.start || !timeSlot?.end) {
-//       return res.status(400).json({
-//         available: false,
-//         message: "Missing required fields (doctorId, date, timeSlot.start, timeSlot.end)",
-//       });
-//     }
-
-//     // 🧠 Fetch doctor
-//     const doctor = await Doctor.findById(doctorId);
-//     if (!doctor) {
-//       return res.status(404).json({ available: false, message: "Doctor not found" });
-//     }
-
-//     // 📅 Check if the date matches doctor’s available days
-//     const dayName = new Date(date).toLocaleDateString("en-US", { weekday: "long" });
-//     if (!doctor.availableDays.includes(dayName)) {
-//       return res.json({
-//         available: false,
-//         message: `Doctor not available on ${dayName}`,
-//       });
-//     }
-
-//     // 🚫 Check if doctor is on leave (if you add leave support later)
-//     if (doctor.leaves?.some((leave) =>
-//       new Date(date) >= new Date(leave.startDate) &&
-//       new Date(date) <= new Date(leave.endDate)
-//     )) {
-//       return res.json({
-//         available: false,
-//         message: "Doctor is on leave on this date",
-//       });
-//     }
-
-//     // 🕒 Check if another booking already exists at that time
-//     const existingAppointment = await Appointment.findOne({
-//       doctor: doctorId,
-//       date: new Date(date),
-//       "timeSlot.start": timeSlot.start,
-//       "timeSlot.end": timeSlot.end,
-//       status: { $in: ["BOOKED", "CONFIRMED", "IN_PROGRESS"] },
-//     });
-
-//     if (existingAppointment) {
-//       return res.json({
-//         available: false,
-//         message: "Doctor already booked at this time slot",
-//       });
-//     }
-
-//     // ✅ If all checks pass
-//     res.json({ available: true, message: "Doctor available for this slot" });
-//   } catch (err) {
-//     console.error("Error checking doctor availability:", err);
-//     res.status(500).json({ available: false, message: "Server error" });
-//   }
-// };
-export const checkDoctorAvailability = async (req, res) => {
+export const verifyDoctorBeforeAppointment = async (req, res) => {
   try {
-    const { doctorId, date, timeSlot } = req.body;
+    const { doctorId, date, timeSlot, currentBookingId } = req.body;
 
     // Validate input
     if (!doctorId || !date || !timeSlot?.start || !timeSlot?.end) {
@@ -138,7 +78,7 @@ export const checkDoctorAvailability = async (req, res) => {
 
     // Ensure leaves exists
     const leaves = Array.isArray(doctor.leaves) ? doctor.leaves : [];
-
+    
     // Check if doctor is on leave
     const onLeave = leaves.some((leave) => {
       const start = new Date(leave.startDate);
@@ -155,12 +95,13 @@ export const checkDoctorAvailability = async (req, res) => {
     }
 
     // Check if another booking already exists at that time
-    const existingAppointment = await Appointment.findOne({
+    const existingAppointment = await Booking.findOne({
       doctor: doctorId,
       date: new Date(date),
       "timeSlot.start": timeSlot.start,
       "timeSlot.end": timeSlot.end,
       status: { $in: ["BOOKED", "CONFIRMED", "IN_PROGRESS"] },
+      ...(currentBookingId ? { _id: { $ne: currentBookingId } } : {}), // exclude current booking
     });
 
     if (existingAppointment) {
@@ -186,12 +127,97 @@ export const confirmBooking = async (req, res) => {
     const booking = await Booking.findById(bookingId);
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    booking.status = "Confirmed";
+    booking.status = "CONFIRMED";
     await booking.save();
 
     res.json({ message: "Booking confirmed successfully", booking });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Cancel a booking
+export const cancelBooking = async (req, res) => {
+  try {
+    const { bookingId, reason, cancelledBy } = req.body;
+
+    // 🧩 Validate input
+    if (!bookingId || !reason || !cancelledBy) {
+      return res.status(400).json({
+        message: "Missing required fields (bookingId, reason, cancelledBy)",
+      });
+    }
+
+    // 🔍 Find the booking by ID
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // 🚫 Update cancellation fields
+    booking.status = "CANCELLED";
+    booking.cancellationReason = reason;
+    booking.cancelledBy = cancelledBy;
+    booking.cancelledAt = new Date();
+
+    await booking.save();
+
+    res.status(200).json({
+      message: "Booking cancelled successfully",
+      booking,
+    });
+  } catch (err) {
+    console.error("❌ Cancel booking error:", err);
+    res.status(500).json({
+      message: "Server error",
+      error: err.message,
+    });
+  }
+};
+
+// POST /api/receptionist/booking/reschedule
+export const rescheduleBooking = async (req, res) => {
+  try {
+    const { bookingId, newDate, newTimeSlot } = req.body;
+
+    if (!bookingId || !newDate || !newTimeSlot?.start || !newTimeSlot?.end) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // Find existing booking
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    // Mark current booking as RESCHEDULED
+    booking.status = "RESCHEDULED";
+    await booking.save();
+
+    // Create a new booking with same patient/doctor
+    const newBooking = new Booking({
+      patient: booking.patient,
+      doctor: booking.doctor,
+      date: new Date(newDate),
+      timeSlot: newTimeSlot,
+      status: "BOOKED",
+      rescheduledFrom: booking._id,
+      hospital: booking.hospital,
+      department: booking.department,
+      reason: booking.reason,
+      priority: booking.priority,
+      createdBy: booking.createdBy,
+      appointmentNumber: `APT-${Date.now()}`, // <-- generate unique number
+    });
+
+
+    await newBooking.save();
+
+    res.json({
+      message: "Booking rescheduled successfully",
+      newBooking
+    });
+  } catch (err) {
+    console.error("Reschedule booking error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

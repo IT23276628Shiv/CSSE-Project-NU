@@ -33,8 +33,9 @@ export default function DoctorCheckModal({ booking, onClose, onBookingConfirmed 
       // Use axios instance with baseURL '/api'
       const res = await api.post("/receptionist/check-availability", {
         doctorId: booking.doctor._id,
-        date: new Date(date).toISOString(),   // server expects ISO date
+        date: new Date(date).toISOString(),
         timeSlot: { start, end },
+        currentBookingId: booking._id, // 👈 important
       });
 
       // res.data should be { available: boolean, message: string, ... }
@@ -42,6 +43,44 @@ export default function DoctorCheckModal({ booking, onClose, onBookingConfirmed 
     } catch (err) {
       console.error("Check availability error:", err);
       // show server error message when available
+      setResult({ available: false, message: err.response?.data?.message || "Server error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+    const isTodaySriLanka = (dateStr) => {
+      const inputDate = new Date(dateStr);
+
+      // Get current time in UTC+5:30
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      const sriLankaDate = new Date(utc + 5.5 * 60 * 60 * 1000);
+
+      // Only compare year, month, day
+      return (
+        inputDate.getFullYear() === sriLankaDate.getFullYear() &&
+        inputDate.getMonth() === sriLankaDate.getMonth() &&
+        inputDate.getDate() === sriLankaDate.getDate()
+      );
+    };
+  const handleConfirmBooking = async () => {
+    if (!booking?._id) return;
+
+    setLoading(true);
+    try {
+      const res = await api.post("/receptionist/booking/confirm", { bookingId: booking._id });
+
+      // Show success in modal
+      setResult({ available: true, message: res.data.message });
+
+      // Refresh parent booking list
+      if (onBookingConfirmed) onBookingConfirmed();
+
+      // ✅ Close the modal automatically
+      onClose(); 
+    } catch (err) {
+      console.error("Error confirming booking:", err);
       setResult({ available: false, message: err.response?.data?.message || "Server error" });
     } finally {
       setLoading(false);
@@ -77,14 +116,74 @@ export default function DoctorCheckModal({ booking, onClose, onBookingConfirmed 
           </Alert>
         )}
       </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>Close</Button>
-        {result?.available && (
-          <Button variant="success" onClick={() => { /* call confirm booking if you want */ }}>
-            Confirm Appointment
-          </Button>
-        )}
-      </Modal.Footer>
+<Modal.Footer>
+  {/* Confirm button: show only if booking is NOT cancelled */}
+  {booking.status == "BOOKED" && (
+    <Button
+      variant="success"
+      onClick={handleConfirmBooking}
+      disabled={
+        !isTodaySriLanka(date) || 
+        loading || 
+        booking.status === "CONFIRMED"
+      }
+      title={
+        booking.status === "CONFIRMED"
+          ? "Booking already confirmed"
+          : !isTodaySriLanka(date)
+          ? "Can only confirm for today's date"
+          : ""
+      }
+    >
+      {booking.status === "CONFIRMED"
+        ? "Already Confirmed"
+        : loading
+        ? <><Spinner animation="border" size="sm" /> Confirming...</>
+        : "Confirm Appointment"}
+    </Button>
+  )}
+
+  {/* Cancel button: show only if booking is NOT confirmed */}
+  {booking.status == "BOOKED" && (
+    <Button
+      variant="danger"
+      onClick={async () => {
+        const reason = prompt("Enter cancellation reason:");
+        if (!reason) return; // user cancelled prompt
+
+        const confirmed = window.confirm(
+          "Are you sure you want to cancel this appointment?"
+        );
+        if (!confirmed) return;
+
+        setLoading(true);
+        try {
+          const res = await api.post("/receptionist/booking/cancel", {
+            bookingId: booking._id,
+            reason,
+            cancelledBy: {
+              userId: localStorage.getItem("userId"),
+              userType: "STAFF"
+            }
+          });
+          alert(res.data.message);
+          if (onBookingConfirmed) onBookingConfirmed();
+          onClose();
+        } catch (err) {
+          console.error("Cancel booking error:", err);
+          alert(err.response?.data?.message || "Server error");
+        } finally {
+          setLoading(false);
+        }
+      }}
+    >
+      Cancel Appointment
+    </Button>
+  )}
+</Modal.Footer>
+
+
+
     </Modal>
   );
 }
