@@ -20,6 +20,7 @@ import hospitalRoutes from "./routes/hospitalRoutes.js";
 import departmentRoutes from "./routes/departmentRoutes.js";
 import checkinRoutes from "./routes/checkinRoutes.js";
 import staffAssignmentRoutes from "./routes/staffAssignmentRoutes.js";
+import receptionistwithpatient from './routes/receptionist/receptionistwithpatient.js'
 
 import { attachSocket } from "./socket.js";
 
@@ -99,6 +100,10 @@ app.use("/api/receptionist", receptionistAuthRoutes);
 app.use("/api/receptionist", receptionistRoutes);     // patients
 app.use("/api/receptionist", checkAppointmentRoutes);
 app.use("/api/doctor", doctorAuthRoutes);
+
+
+//harushanan receptionist
+app.use("/receptionist/patients",receptionistwithpatient);
 
 // 404 Handler
 app.use((req, res) => {
