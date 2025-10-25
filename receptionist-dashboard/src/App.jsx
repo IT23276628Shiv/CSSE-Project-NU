@@ -6,8 +6,10 @@ import AddPatient from "./pages/AddPatients";
 import ViewPatients from "./pages/ViewPatients";
 import BookAppointment from "./pages/BookAppointment";
 import CheckBooking from "./pages/checkBookings/CheckBooking";
-import DoctorDashboard from "./pages/doctor/DoctorDashboard"; // 👈 New doctor dashboard page
+import DoctorDashboard from "./pages/doctor/DoctorDashboard"; 
 import AddDoctor from "./pages/AddDoctor";
+import GivePatientReport from "./pages/doctor/GivePatientReport";
+import AddLeaves from "./pages/doctor/AddLeaves";
 
 import PatientHistory from "./pages/PatientHistory";
 
@@ -85,6 +87,22 @@ export default function App() {
           element={
             <PrivateRoute allowedType="DOCTOR">
               <DoctorDashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/doctor/give-patient-report"
+          element={
+            <PrivateRoute allowedType="DOCTOR">
+              <GivePatientReport />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/doctor/add-leaves"
+          element={
+            <PrivateRoute allowedType="DOCTOR">
+              <AddLeaves  />
             </PrivateRoute>
           }
         />

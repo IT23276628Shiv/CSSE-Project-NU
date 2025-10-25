@@ -28,8 +28,10 @@ export default function Login() {
         let res = await api.post("/doctor/login", { email, password });
 
         localStorage.setItem("token", res.data.token);
+        localStorage.setItem("doctorId", res.data.doctor.id);
         localStorage.setItem("name", res.data.doctor.fullName);
         localStorage.setItem("userType", "DOCTOR");
+        
 
         nav("/doctor-dashboard"); // ✅ doctor dashboard
       } catch (doctorError) {
