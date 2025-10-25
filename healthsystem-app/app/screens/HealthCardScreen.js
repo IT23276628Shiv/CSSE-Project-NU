@@ -1,4 +1,7 @@
-import React from "react";
+// healthsystem-app/app/screens/HealthCardScreen.js
+// UPDATED: Improved data fetching, state management, and refresh functionality
+
+import React, { useState, useEffect } from "react";
 import { 
   View, 
   Text, 
@@ -8,77 +11,77 @@ import {
   Share,
   SafeAreaView,
   Platform,
-  StatusBar
+  StatusBar,
+  RefreshControl,
+  ActivityIndicator
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/context/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import colors from "../../src/constants/colors";
+import client from "../../src/api/client";
 
 export default function HealthCardScreen() {
-  const { user } = useAuth();
-  
-  // Comprehensive health card data matching your MongoDB structure
+  const { user, setUser } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      setLoading(true);
+      const { data } = await client.get("/patients/me");
+      console.log("Fetched user data:", data); // Debug log
+      setUser(prevUser => ({ ...prevUser, ...data }));
+    } catch (error) {
+      console.error("Failed to load user data:", error);
+      Alert.alert("Error", "Failed to load health card data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadUserData();
+    setRefreshing(false);
+  };
+
+  // Comprehensive health card data matching MongoDB structure
   const healthCardData = {
-    // Basic Identity
     _id: user?.id,
     healthCardId: user?.healthCardId,
     email: user?.email,
     fullName: user?.fullName,
-    
-    // Contact Information
     phone: user?.phone,
     alternatePhone: user?.alternatePhone,
-    
-    // Personal Details
     nic: user?.nic,
     dateOfBirth: user?.dateOfBirth,
     age: user?.age,
     gender: user?.gender,
-    
-    // Address (matching DB structure)
     address: user?.address || null,
-    
-    // Medical Information
     bloodGroup: user?.bloodGroup,
-    
-    // Allergies array (matching DB structure: Array of objects with allergen, reaction, severity)
     allergies: user?.allergies || [],
-    
-    // Chronic Conditions array (matching DB structure)
     chronicConditions: user?.chronicConditions || [],
-    
-    // Current Medications array (matching DB structure)
     currentMedications: user?.currentMedications || [],
-    
-    // Emergency Contact (matching DB structure)
     emergencyContact: user?.emergencyContact || null,
-    
-    // Insurance Information array (matching DB structure)
     insuranceInfo: user?.insuranceInfo || [],
-    
-    // Additional Profile Info
     preferredLanguage: user?.preferredLanguage,
     nationality: user?.nationality,
     occupation: user?.occupation,
     maritalStatus: user?.maritalStatus,
     ethnicity: user?.ethnicity,
     religion: user?.religion,
-    
-    // Medical History
     lastVisit: user?.lastVisit || null,
     preferredHospital: user?.preferredHospital,
-    
-    // Account Information
     isActive: user?.isActive,
     accountStatus: user?.accountStatus,
     registrationDate: user?.registrationDate,
-    
-    // Avatar
     avatarUrl: user?.avatarUrl,
-    
-    // Metadata for QR code
     qrGeneratedAt: new Date().toISOString(),
     qrVersion: "2.0"
   };
@@ -91,9 +94,13 @@ export default function HealthCardScreen() {
       if (user?.allergies && user.allergies.length > 0) {
         allergyText = user.allergies.map(a => {
           if (typeof a === 'string') return a;
-          return `${a.allergen} (${a.severity || 'unknown severity'})`;
+          return `${a.allergen || 'Unknown'} (${a.severity || 'unknown severity'})`;
         }).join(', ');
       }
+
+      const emergencyName = user?.emergencyContact?.name || 'Not set';
+      const emergencyPhone = user?.emergencyContact?.phone || 'Not set';
+      const emergencyRelation = user?.emergencyContact?.relationship || 'N/A';
 
       const shareMessage = `
 🏥 My Health Card
@@ -105,8 +112,10 @@ Phone: ${user?.phone || 'Not provided'}
 
 ⚠️ Allergies: ${allergyText}
 
-🚨 Emergency Contact: ${user?.emergencyContact?.name || 'Not set'}
-   Phone: ${user?.emergencyContact?.phone || 'Not set'}
+🚨 Emergency Contact:
+   Name: ${emergencyName}
+   Relation: ${emergencyRelation}
+   Phone: ${emergencyPhone}
 ━━━━━━━━━━━━━━━━━━━━
 Present this QR code at any hospital for quick check-in.
       `.trim();
@@ -121,32 +130,42 @@ Present this QR code at any hospital for quick check-in.
   };
 
   const handleEmergencyInfo = () => {
-    // Format allergies
     let allergiesText = 'None recorded';
     if (user?.allergies && user.allergies.length > 0) {
       allergiesText = user.allergies.map(a => {
         if (typeof a === 'string') return `• ${a}`;
-        return `• ${a.allergen} - ${a.reaction || 'No reaction noted'} (${a.severity || 'Severity not specified'})`;
+        const allergen = a.allergen || 'Unknown allergen';
+        const reaction = a.reaction || 'No reaction noted';
+        const severity = a.severity || 'Severity not specified';
+        return `• ${allergen} - ${reaction} (${severity})`;
       }).join('\n   ');
     }
 
-    // Format chronic conditions
     let conditionsText = 'None recorded';
     if (user?.chronicConditions && user.chronicConditions.length > 0) {
       conditionsText = user.chronicConditions.map(c => {
         if (typeof c === 'string') return `• ${c}`;
-        return `• ${c.condition} (${c.status || 'Status unknown'})`;
+        const condition = c.condition || 'Unknown condition';
+        const status = c.status || 'Status unknown';
+        return `• ${condition} (${status})`;
       }).join('\n   ');
     }
 
-    // Format medications
     let medicationsText = 'None';
     if (user?.currentMedications && user.currentMedications.length > 0) {
       medicationsText = user.currentMedications.map(m => {
         if (typeof m === 'string') return `• ${m}`;
-        return `• ${m.name} - ${m.dosage || 'Dosage not specified'} (${m.frequency || ''})`;
+        const name = m.name || 'Unknown medication';
+        const dosage = m.dosage || 'Dosage not specified';
+        const frequency = m.frequency || '';
+        return `• ${name} - ${dosage} ${frequency}`;
       }).join('\n   ');
     }
+
+    const emergencyName = user?.emergencyContact?.name || 'Not set';
+    const emergencyRelation = user?.emergencyContact?.relationship || 'N/A';
+    const emergencyPhone = user?.emergencyContact?.phone || 'Not provided';
+    const emergencyAltPhone = user?.emergencyContact?.alternatePhone || '';
 
     const emergencyInfo = `
 ━━━━━━━━━━━━━━━━━━━━
@@ -162,10 +181,10 @@ EMERGENCY INFORMATION
 ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
 
 🚨 Emergency Contact:
-   Name: ${user?.emergencyContact?.name || 'Not set'}
-   Relation: ${user?.emergencyContact?.relationship || 'N/A'}
-   Phone: ${user?.emergencyContact?.phone || 'Not provided'}
-   ${user?.emergencyContact?.alternatePhone ? `Alternate: ${user.emergencyContact.alternatePhone}` : ''}
+   Name: ${emergencyName}
+   Relation: ${emergencyRelation}
+   Phone: ${emergencyPhone}
+   ${emergencyAltPhone ? `Alternate: ${emergencyAltPhone}` : ''}
 
 ⚠️ ALLERGIES:
    ${allergiesText}
@@ -218,25 +237,34 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
 
   const completeness = getDataCompleteness();
 
-  // Format allergies for display
   const getAllergiesDisplay = () => {
     if (!user?.allergies || user.allergies.length === 0) return null;
-    
     return user.allergies.map(a => {
       if (typeof a === 'string') return a;
-      return `${a.allergen} (${a.severity || 'unknown'})`;
+      const allergen = a.allergen || 'Unknown';
+      const severity = a.severity || 'unknown';
+      return `${allergen} (${severity})`;
     }).join(', ');
   };
 
-  // Format chronic conditions for display
   const getChronicConditionsDisplay = () => {
     if (!user?.chronicConditions || user.chronicConditions.length === 0) return null;
-    
     return user.chronicConditions.map(c => {
       if (typeof c === 'string') return c;
-      return c.condition;
+      return c.condition || 'Unknown condition';
     }).join(', ');
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 16, color: colors.textMuted }}>Loading health card...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView 
@@ -249,6 +277,14 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
       <ScrollView 
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* Main Health Card */}
         <LinearGradient 
@@ -270,7 +306,7 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
           <View style={{ 
             flexDirection: 'row', 
             justifyContent: 'space-between', 
-            width: '100%', 
+            width: '100', 
             marginBottom: 20 
           }}>
             <View style={{ flex: 1 }}>
@@ -328,7 +364,7 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
 
           {/* Data Completeness Indicator */}
           <View style={{ 
-            width: '100%', 
+            width: '100', 
             backgroundColor: 'rgba(255,255,255,0.3)', 
             padding: 12, 
             borderRadius: 12,
@@ -402,6 +438,11 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
                 <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>
                   {user?.emergencyContact?.name || 'Not set'}
                 </Text>
+                {user?.emergencyContact?.phone && (
+                  <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                    {user.emergencyContact.phone}
+                  </Text>
+                )}
               </View>
 
               {getAllergiesDisplay() && (
@@ -471,41 +512,6 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
             ))}
           </View>
 
-          {/* How to Use */}
-          <View style={{
-            backgroundColor: colors.white,
-            borderRadius: 16,
-            padding: 20,
-            borderWidth: 1,
-            borderColor: colors.border
-          }}>
-            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 12 }}>
-              How to Use Your Health Card
-            </Text>
-            
-            {[
-              "Present QR code at hospital reception desk",
-              "Staff will scan to access your medical profile instantly",
-              "All allergies, conditions & medications will be visible",
-              "No need to fill forms or repeat medical history"
-            ].map((instruction, index) => (
-              <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-                <Text style={{ 
-                  fontSize: 16, 
-                  fontWeight: "700", 
-                  color: colors.primary, 
-                  marginRight: 8,
-                  minWidth: 20
-                }}>
-                  {index + 1}.
-                </Text>
-                <Text style={{ fontSize: 14, color: colors.text, flex: 1, lineHeight: 20 }}>
-                  {instruction}
-                </Text>
-              </View>
-            ))}
-          </View>
-
           {/* Security Notice */}
           <View style={{
             backgroundColor: '#FFF3CD',
@@ -528,39 +534,6 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
               </Text>
             </View>
           </View>
-
-          {/* Database Info */}
-          <View style={{
-            backgroundColor: `${colors.success}10`,
-            borderRadius: 12,
-            padding: 16,
-            marginTop: 12,
-            borderWidth: 1,
-            borderColor: `${colors.success}30`
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-              <Text style={{ 
-                fontSize: 12, 
-                color: colors.success, 
-                marginLeft: 8,
-                flex: 1,
-                lineHeight: 16
-              }}>
-                Synced with hospital database • Patient ID: {user?.id?.slice(-8) || 'N/A'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Last Updated */}
-          <Text style={{ 
-            fontSize: 12, 
-            color: colors.textMuted, 
-            textAlign: 'center', 
-            marginTop: 20
-          }}>
-            Digital Health Card v2.0 • Generated {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>

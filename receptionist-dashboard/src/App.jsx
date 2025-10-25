@@ -11,6 +11,8 @@ import AddDoctor from "./pages/AddDoctor";
 import GivePatientReport from "./pages/doctor/GivePatientReport";
 import AddLeaves from "./pages/doctor/AddLeaves";
 
+import PatientHistory from "./pages/PatientHistory";
+
 // ✅ Role-based PrivateRoute
 function PrivateRoute({ children, allowedType }) {
   const token = localStorage.getItem("token");
@@ -104,6 +106,9 @@ export default function App() {
             </PrivateRoute>
           }
         />
+
+
+        <Route path="/patients/:id/history" element={<PatientHistory />} />
 
         {/* 🚫 Unauthorized Page */}
         <Route

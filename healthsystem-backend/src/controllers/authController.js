@@ -1,21 +1,38 @@
-// Unified authentication controller for Patient and Staff
-// Path: src/controllers/authController.js
+// healthsystem-backend/src/controllers/authController.js
+// Updated with comprehensive validation - FIXED DUPLICATE EXPORTS
 
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { Patient, Staff, AuditLog } from "../models/index.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
+import {
+  validateEmail,
+  validatePassword,
+  validatePhone,
+  validateFullName,
+  validateNIC,
+  validateFields
+} from "../utils/validators.js";
 
 /**
  * Unified login for both patients and staff
  * POST /auth/login
- * Body: { email, password, userType: "PATIENT" | "STAFF" }
  */
 export const login = asyncHandler(async (req, res) => {
   const { email, password, userType = "PATIENT" } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password required" });
+  // Validate input
+  const emailValidation = validateEmail(email);
+  const passwordValidation = validatePassword(password);
+
+  if (!emailValidation.valid || !passwordValidation.valid) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: {
+        email: emailValidation.error,
+        password: passwordValidation.error
+      }
+    });
   }
 
   if (!["PATIENT", "STAFF"].includes(userType)) {
@@ -24,7 +41,7 @@ export const login = asyncHandler(async (req, res) => {
 
   let user, role;
 
-  // Find user based on type without triggering full validation
+  // Find user based on type
   if (userType === "PATIENT") {
     user = await Patient.findOne({ email: email.toLowerCase() }).select("+passwordHash");
     if (!user || !user.isActive) {
@@ -50,7 +67,7 @@ export const login = asyncHandler(async (req, res) => {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  // Generate JWT token without modifying the user document
+  // Generate JWT token
   const token = jwt.sign(
     { 
       id: user._id,
@@ -62,8 +79,12 @@ export const login = asyncHandler(async (req, res) => {
     { expiresIn: "7d" }
   );
 
-  // Log successful login without saving
+  // Log successful login
   await logAuditAction(user._id, "LOGIN", userType, null, "SUCCESS", req);
+
+  // Update last login
+  user.lastLogin = new Date();
+  await user.save({ validateBeforeSave: false });
 
   // Prepare response
   const response = {
@@ -100,7 +121,7 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 /**
- * Patient registration (can be called by staff or self-registration if enabled)
+ * Patient registration
  * POST /auth/register/patient
  */
 export const registerPatient = asyncHandler(async (req, res) => {
@@ -116,10 +137,19 @@ export const registerPatient = asyncHandler(async (req, res) => {
     emergencyContact
   } = req.body;
 
-  // Validation
-  if (!email || !password || !fullName || !phone) {
-    return res.status(400).json({ 
-      error: "Email, password, full name, and phone are required" 
+  // Comprehensive validation
+  const validationResults = validateFields({
+    email: validateEmail(email),
+    password: validatePassword(password),
+    fullName: validateFullName(fullName),
+    phone: validatePhone(phone),
+    nic: validateNIC(nic)
+  });
+
+  if (!validationResults.valid) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: validationResults.errors
     });
   }
 
@@ -129,7 +159,7 @@ export const registerPatient = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "Email already registered" });
   }
 
-  // Check if NIC already exists
+  // Check if NIC already exists (if provided)
   if (nic) {
     const existingNIC = await Patient.findOne({ nic });
     if (existingNIC) {
@@ -173,109 +203,6 @@ export const registerPatient = asyncHandler(async (req, res) => {
 });
 
 /**
- * Staff registration (admin only)
- * POST /auth/register/staff
- */
-export const registerStaff = asyncHandler(async (req, res) => {
-  const {
-    email,
-    password,
-    fullName,
-    staffId,
-    role,
-    specialization,
-    hospital,
-    department,
-    phone,
-    nic,
-    licenseNumber
-  } = req.body;
-
-  // Validation
-  if (!email || !password || !fullName || !staffId || !role || !hospital || !department) {
-    return res.status(400).json({ 
-      error: "All required fields must be provided" 
-    });
-  }
-
-  // Check if email already exists
-  const existingStaff = await Staff.findOne({ email: email.toLowerCase() });
-  if (existingStaff) {
-    return res.status(400).json({ error: "Email already registered" });
-  }
-
-  // Check if staffId already exists
-  const existingStaffId = await Staff.findOne({ staffId: staffId.toUpperCase() });
-  if (existingStaffId) {
-    return res.status(400).json({ error: "Staff ID already exists" });
-  }
-
-  // Hash password
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  // Create staff
-  const staff = await Staff.create({
-    email: email.toLowerCase(),
-    passwordHash,
-    fullName,
-    staffId: staffId.toUpperCase(),
-    role,
-    specialization,
-    hospital,
-    department,
-    phone,
-    nic,
-    licenseNumber
-  });
-
-  // Log audit
-  await logAuditAction(req.user?.id, "CREATE", "STAFF", staff._id, "SUCCESS", req);
-
-  res.status(201).json({
-    message: "Staff registered successfully",
-    staff: {
-      id: staff._id,
-      email: staff.email,
-      fullName: staff.fullName,
-      staffId: staff.staffId,
-      role: staff.role
-    }
-  });
-});
-
-/**
- * Refresh token
- * POST /auth/refresh
- */
-export const refreshToken = asyncHandler(async (req, res) => {
-  const { token } = req.body;
-
-  if (!token) {
-    return res.status(400).json({ error: "Token required" });
-  }
-
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Generate new token
-    const newToken = jwt.sign(
-      { 
-        id: payload.id,
-        userType: payload.userType,
-        role: payload.role,
-        email: payload.email
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.json({ token: newToken });
-  } catch (error) {
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-});
-
-/**
  * Change password
  * POST /auth/change-password
  */
@@ -283,17 +210,23 @@ export const changePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const { id, userType } = req.user;
 
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: "Current and new passwords required" });
-  }
+  // Validate passwords
+  const currentPwdValidation = validatePassword(currentPassword);
+  const newPwdValidation = validatePassword(newPassword);
 
-  if (newPassword.length < 6) {
-    return res.status(400).json({ error: "New password must be at least 6 characters" });
+  if (!currentPwdValidation.valid || !newPwdValidation.valid) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: {
+        currentPassword: currentPwdValidation.error,
+        newPassword: newPwdValidation.error
+      }
+    });
   }
 
   // Find user
   const Model = userType === "PATIENT" ? Patient : Staff;
-  const user = await Model.findById(id);
+  const user = await Model.findById(id).select("+passwordHash");
 
   if (!user) {
     return res.status(404).json({ error: "User not found" });
@@ -307,6 +240,11 @@ export const changePassword = asyncHandler(async (req, res) => {
     return res.status(401).json({ error: "Current password is incorrect" });
   }
 
+  // Check if new password is different
+  if (currentPassword === newPassword) {
+    return res.status(400).json({ error: "New password must be different from current password" });
+  }
+
   // Hash and save new password
   user.passwordHash = await bcrypt.hash(newPassword, 10);
   await user.save();
@@ -318,33 +256,7 @@ export const changePassword = asyncHandler(async (req, res) => {
 });
 
 /**
- * Request password reset
- * POST /auth/forgot-password
- */
-export const forgotPassword = asyncHandler(async (req, res) => {
-  const { email, userType = "PATIENT" } = req.body;
-
-  if (!email) {
-    return res.status(400).json({ error: "Email required" });
-  }
-
-  const Model = userType === "PATIENT" ? Patient : Staff;
-  const user = await Model.findOne({ email: email.toLowerCase() });
-
-  if (!user) {
-    // Don't reveal if email exists
-    return res.json({ message: "If the email exists, a reset link will be sent" });
-  }
-
-  // TODO: Generate reset token and send email
-  // For now, just log the request
-  await logAuditAction(user._id, "READ", userType, "password_reset_request", "SUCCESS", req);
-
-  res.json({ message: "If the email exists, a reset link will be sent" });
-});
-
-/**
- * Logout (mainly for audit logging)
+ * Logout
  * POST /auth/logout
  */
 export const logout = asyncHandler(async (req, res) => {
@@ -422,3 +334,148 @@ async function logAuditAction(userId, action, resource, details, status, req) {
     console.error("Audit log error:", error);
   }
 }
+
+/**
+ * Request password reset
+ * POST /auth/forgot-password
+ */
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email, userType = "PATIENT" } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: "Email required" });
+  }
+
+  const Model = userType === "PATIENT" ? Patient : Staff;
+  const user = await Model.findOne({ email: email.toLowerCase() });
+
+  if (!user) {
+    // Don't reveal if email exists
+    return res.json({ message: "If the email exists, a reset link will be sent" });
+  }
+
+  // TODO: Generate reset token and send email
+  // For now, just log the request
+  await logAuditAction(user._id, "READ", userType, "password_reset_request", "SUCCESS", req);
+
+  res.json({ message: "If the email exists, a reset link will be sent" });
+});
+
+/**
+ * Refresh token
+ * POST /auth/refresh
+ */
+export const refreshToken = asyncHandler(async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ error: "Token required" });
+  }
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Generate new token
+    const newToken = jwt.sign(
+      { 
+        id: payload.id,
+        userType: payload.userType,
+        role: payload.role,
+        email: payload.email
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({ token: newToken });
+  } catch (error) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+/**
+ * Staff registration (admin only)
+ * POST /auth/register/staff
+ */
+export const registerStaff = asyncHandler(async (req, res) => {
+  const {
+    email,
+    password,
+    fullName,
+    staffId,
+    role,
+    specialization,
+    hospital,
+    department,
+    phone,
+    nic,
+    licenseNumber
+  } = req.body;
+
+  // Comprehensive validation
+  const validationResults = validateFields({
+    email: validateEmail(email),
+    password: validatePassword(password),
+    fullName: validateFullName(fullName),
+    phone: validatePhone(phone),
+    nic: validateNIC(nic)
+  });
+
+  if (!validationResults.valid) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: validationResults.errors
+    });
+  }
+
+  // Additional required fields
+  if (!staffId || !role || !hospital || !department) {
+    return res.status(400).json({ 
+      error: "All required fields must be provided" 
+    });
+  }
+
+  // Check if email already exists
+  const existingStaff = await Staff.findOne({ email: email.toLowerCase() });
+  if (existingStaff) {
+    return res.status(400).json({ error: "Email already registered" });
+  }
+
+  // Check if staffId already exists
+  const existingStaffId = await Staff.findOne({ staffId: staffId.toUpperCase() });
+  if (existingStaffId) {
+    return res.status(400).json({ error: "Staff ID already exists" });
+  }
+
+  // Hash password
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  // Create staff
+  const staff = await Staff.create({
+    email: email.toLowerCase(),
+    passwordHash,
+    fullName,
+    staffId: staffId.toUpperCase(),
+    role,
+    specialization,
+    hospital,
+    department,
+    phone,
+    nic,
+    licenseNumber
+  });
+
+  // Log audit
+  await logAuditAction(req.user?.id, "CREATE", "STAFF", staff._id, "SUCCESS", req);
+
+  res.status(201).json({
+    message: "Staff registered successfully",
+    staff: {
+      id: staff._id,
+      email: staff.email,
+      fullName: staff.fullName,
+      staffId: staff.staffId,
+      role: staff.role
+    }
+  });
+});
