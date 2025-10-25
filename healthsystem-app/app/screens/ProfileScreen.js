@@ -1,5 +1,5 @@
 // healthsystem-app/app/screens/ProfileScreen.js
-// FIXED: Added validation for phone, NIC, and date of birth
+// FIXED: All fields now persist after logout + improved validation
 
 import React, { useEffect, useState } from "react";
 import { 
@@ -85,12 +85,24 @@ export default function ProfileScreen() {
   const [form, setForm] = useState({ 
     fullName: "", 
     phone: "", 
-    address: "", 
+    alternatePhone: "",
+    address: {
+      street: "",
+      city: "",
+      district: "",
+      province: "",
+      postalCode: ""
+    },
     bloodGroup: "", 
     allergies: [],
-    emergencyContact: "",
+    emergencyContact: {
+      name: "",
+      phone: "",
+      relationship: ""
+    },
     dateOfBirth: "",
-    nic: ""
+    nic: "",
+    gender: ""
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -106,15 +118,29 @@ export default function ProfileScreen() {
     try {
       setLoading(true);
       const { data } = await client.get("/patients/me");
+      
+      // FIXED: Properly load all fields including nested objects
       setForm({
         fullName: data.fullName || "",
         phone: data.phone || "",
-        address: data.address?.street || "",
+        alternatePhone: data.alternatePhone || "",
+        address: {
+          street: data.address?.street || "",
+          city: data.address?.city || "",
+          district: data.address?.district || "",
+          province: data.address?.province || "",
+          postalCode: data.address?.postalCode || ""
+        },
         bloodGroup: data.bloodGroup || "",
         allergies: data.allergies || [],
-        emergencyContact: data.emergencyContact?.phone || "",
+        emergencyContact: {
+          name: data.emergencyContact?.name || "",
+          phone: data.emergencyContact?.phone || "",
+          relationship: data.emergencyContact?.relationship || ""
+        },
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString().split('T')[0] : "",
-        nic: data.nic || ""
+        nic: data.nic || "",
+        gender: data.gender || ""
       });
     } catch (error) {
       console.error("Failed to load profile:", error);
@@ -138,6 +164,14 @@ export default function ProfileScreen() {
       newErrors.phone = phoneValidation.error;
     }
 
+    // Validate alternate phone if provided
+    if (form.alternatePhone) {
+      const altPhoneValidation = validatePhone(form.alternatePhone);
+      if (!altPhoneValidation.valid) {
+        newErrors.alternatePhone = altPhoneValidation.error;
+      }
+    }
+
     // Validate NIC
     const nicValidation = validateNIC(form.nic);
     if (!nicValidation.valid) {
@@ -150,10 +184,12 @@ export default function ProfileScreen() {
       newErrors.dateOfBirth = dobValidation.error;
     }
 
-    // Validate emergency contact
-    const emergencyValidation = validateEmergencyContact(form.emergencyContact);
-    if (!emergencyValidation.valid) {
-      newErrors.emergencyContact = emergencyValidation.error;
+    // Validate emergency contact phone if provided
+    if (form.emergencyContact.phone) {
+      const emergencyValidation = validateEmergencyContact(form.emergencyContact.phone);
+      if (!emergencyValidation.valid) {
+        newErrors.emergencyContactPhone = emergencyValidation.error;
+      }
     }
 
     setErrors(newErrors);
@@ -169,21 +205,37 @@ export default function ProfileScreen() {
 
     setSaving(true);
     try {
+      // FIXED: Send complete address object and emergency contact
       const payload = {
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
-        address: form.address.trim(),
-        bloodGroup: form.bloodGroup,
+        alternatePhone: form.alternatePhone.trim() || undefined,
+        address: {
+          street: form.address.street.trim(),
+          city: form.address.city.trim(),
+          district: form.address.district.trim(),
+          province: form.address.province.trim(),
+          postalCode: form.address.postalCode.trim()
+        },
+        bloodGroup: form.bloodGroup || undefined,
         emergencyContact: {
-          phone: form.emergencyContact.trim()
+          name: form.emergencyContact.name.trim(),
+          phone: form.emergencyContact.phone.trim(),
+          relationship: form.emergencyContact.relationship.trim()
         },
         dateOfBirth: form.dateOfBirth || undefined,
-        nic: form.nic.trim() || undefined
+        nic: form.nic.trim() || undefined,
+        gender: form.gender || undefined
       };
+
+      console.log("Saving profile with payload:", payload);
 
       const { data } = await client.patch("/patients/me", payload);
       setUser(data);
       Alert.alert("Success", "Profile updated successfully");
+      
+      // Reload profile to ensure data is fresh
+      await loadProfile();
     } catch (error) {
       console.error("Save error:", error);
       Alert.alert("Error", error.message || "Failed to save profile");
@@ -424,6 +476,31 @@ export default function ProfileScreen() {
               )}
             </View>
 
+            {/* Alternate Phone */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Alternate Phone</Text>
+              <TextInput 
+                value={form.alternatePhone} 
+                onChangeText={(t) => {
+                  setForm((s) => ({ ...s, alternatePhone: t }));
+                  if (errors.alternatePhone) setErrors((e) => ({ ...e, alternatePhone: null }));
+                }}
+                style={errors.alternatePhone ? errorInputStyle : inputStyle}
+                placeholder="0771234567 (Optional)"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+                maxLength={10}
+              />
+              {errors.alternatePhone && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                  <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 4 }}>
+                    {errors.alternatePhone}
+                  </Text>
+                </View>
+              )}
+            </View>
+
             {/* NIC */}
             <View style={{ marginBottom: 16 }}>
               <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>NIC</Text>
@@ -473,18 +550,34 @@ export default function ProfileScreen() {
               )}
             </View>
 
-            {/* Address */}
+            {/* Gender */}
             <View style={{ marginBottom: 16 }}>
-              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Address</Text>
-              <TextInput 
-                value={form.address} 
-                onChangeText={(t) => setForm((s) => ({ ...s, address: t }))} 
-                style={[inputStyle, { textAlignVertical: 'top', minHeight: 80 }]}
-                placeholder="Enter your address"
-                placeholderTextColor={colors.textMuted}
-                multiline
-                numberOfLines={3}
-              />
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Gender</Text>
+              <View style={{ flexDirection: 'row', marginTop: 8, gap: 8 }}>
+                {['MALE', 'FEMALE', 'OTHER'].map((gender) => (
+                  <TouchableOpacity
+                    key={gender}
+                    onPress={() => setForm((s) => ({ ...s, gender }))}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1.5,
+                      borderColor: form.gender === gender ? colors.primary : colors.border,
+                      borderRadius: 12,
+                      paddingVertical: 12,
+                      alignItems: 'center',
+                      backgroundColor: form.gender === gender ? `${colors.primary}10` : colors.background
+                    }}
+                  >
+                    <Text style={{ 
+                      color: form.gender === gender ? colors.primary : colors.text,
+                      fontWeight: form.gender === gender ? '600' : '400',
+                      fontSize: 14
+                    }}>
+                      {gender.charAt(0) + gender.slice(1).toLowerCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             {/* Blood Group */}
@@ -540,50 +633,165 @@ export default function ProfileScreen() {
                 </View>
               )}
             </View>
+          </PCard>
+        </View>
 
-            {/* Emergency Contact */}
-            <View style={{ marginBottom: 24 }}>
-              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Emergency Contact Phone</Text>
+        {/* Address Section */}
+        <View style={{ padding: 16, paddingTop: 0 }}>
+          <PCard style={{ padding: 20 }}>
+            <Text style={{ 
+              fontSize: 18, 
+              fontWeight: "800", 
+              color: colors.text,
+              marginBottom: 20 
+            }}>
+              Address Information
+            </Text>
+
+            {/* Street */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Street Address</Text>
               <TextInput 
-                value={form.emergencyContact} 
+                value={form.address.street} 
+                onChangeText={(t) => setForm((s) => ({ ...s, address: { ...s.address, street: t } }))}
+                style={inputStyle}
+                placeholder="123 Main Street"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            {/* City */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>City</Text>
+              <TextInput 
+                value={form.address.city} 
+                onChangeText={(t) => setForm((s) => ({ ...s, address: { ...s.address, city: t } }))}
+                style={inputStyle}
+                placeholder="Colombo"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            {/* District */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>District</Text>
+              <TextInput 
+                value={form.address.district} 
+                onChangeText={(t) => setForm((s) => ({ ...s, address: { ...s.address, district: t } }))}
+                style={inputStyle}
+                placeholder="Colombo"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            {/* Province */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Province</Text>
+              <TextInput 
+                value={form.address.province} 
+                onChangeText={(t) => setForm((s) => ({ ...s, address: { ...s.address, province: t } }))}
+                style={inputStyle}
+                placeholder="Western"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            {/* Postal Code */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Postal Code</Text>
+              <TextInput 
+                value={form.address.postalCode} 
+                onChangeText={(t) => setForm((s) => ({ ...s, address: { ...s.address, postalCode: t } }))}
+                style={inputStyle}
+                placeholder="00100"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                maxLength={5}
+              />
+            </View>
+          </PCard>
+        </View>
+
+        {/* Emergency Contact Section */}
+        <View style={{ padding: 16, paddingTop: 0 }}>
+          <PCard style={{ padding: 20 }}>
+            <Text style={{ 
+              fontSize: 18, 
+              fontWeight: "800", 
+              color: colors.text,
+              marginBottom: 20 
+            }}>
+              Emergency Contact
+            </Text>
+
+            {/* Emergency Contact Name */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Contact Name</Text>
+              <TextInput 
+                value={form.emergencyContact.name} 
+                onChangeText={(t) => setForm((s) => ({ ...s, emergencyContact: { ...s.emergencyContact, name: t } }))}
+                style={inputStyle}
+                placeholder="John Doe"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            {/* Emergency Contact Relationship */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Relationship</Text>
+              <TextInput 
+                value={form.emergencyContact.relationship} 
+                onChangeText={(t) => setForm((s) => ({ ...s, emergencyContact: { ...s.emergencyContact, relationship: t } }))}
+                style={inputStyle}
+                placeholder="Father / Mother / Spouse / Friend"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            {/* Emergency Contact Phone */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 14 }}>Contact Phone</Text>
+              <TextInput 
+                value={form.emergencyContact.phone} 
                 onChangeText={(t) => {
-                  setForm((s) => ({ ...s, emergencyContact: t }));
-                  if (errors.emergencyContact) setErrors((e) => ({ ...e, emergencyContact: null }));
+                  setForm((s) => ({ ...s, emergencyContact: { ...s.emergencyContact, phone: t } }));
+                  if (errors.emergencyContactPhone) setErrors((e) => ({ ...e, emergencyContactPhone: null }));
                 }}
-                style={errors.emergencyContact ? errorInputStyle : inputStyle}
+                style={errors.emergencyContactPhone ? errorInputStyle : inputStyle}
                 placeholder="0771234567"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="phone-pad"
                 maxLength={10}
               />
-              {errors.emergencyContact && (
+              {errors.emergencyContactPhone && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                   <Ionicons name="alert-circle" size={14} color={colors.danger} />
                   <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 4 }}>
-                    {errors.emergencyContact}
+                    {errors.emergencyContactPhone}
                   </Text>
                 </View>
               )}
             </View>
-
-            {/* Save Button */}
-            <PButton 
-              title={saving ? "Saving..." : "Save Changes"}
-              onPress={save} 
-              loading={saving}
-              disabled={saving}
-              style={{ marginBottom: 12 }}
-            />
-
-            {/* Logout Button */}
-            <PButton 
-              title="Logout" 
-              onPress={handleLogout} 
-              type="outline"
-              textStyle={{ color: colors.danger }}
-              style={{ borderColor: colors.danger }}
-            />
           </PCard>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={{ padding: 16, paddingTop: 0 }}>
+          <PButton 
+            title={saving ? "Saving..." : "Save Changes"}
+            onPress={save} 
+            loading={saving}
+            disabled={saving}
+            style={{ marginBottom: 12 }}
+          />
+
+          <PButton 
+            title="Logout" 
+            onPress={handleLogout} 
+            type="outline"
+            textStyle={{ color: colors.danger }}
+            style={{ borderColor: colors.danger }}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>

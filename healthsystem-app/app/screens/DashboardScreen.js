@@ -1,3 +1,6 @@
+// healthsystem-app/app/screens/DashboardScreen.js
+// FIXED: Added pull-to-refresh functionality
+
 import React, { useEffect, useState } from "react";
 import {
   ScrollView,
@@ -11,7 +14,8 @@ import {
   Dimensions,
   Platform,
   Image,
-  Alert
+  Alert,
+  RefreshControl
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -138,6 +142,14 @@ export default function DashboardScreen({ navigation }) {
           paddingBottom: 100,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={load}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* Greeting Banner - MUST BE FIRST */}
         <View style={{ paddingHorizontal: 20, paddingTop: 45, backgroundColor: '#F8F7FF' }}>

@@ -1,5 +1,5 @@
 // healthsystem-app/app/screens/AppointmentsScreen.js
-// FIXED: Improved timezone handling, better date validation, error messages
+// FIXED: Modal buttons now visible + improved timezone handling
 
 import React, { useEffect, useState } from "react";
 import { 
@@ -611,7 +611,7 @@ export default function AppointmentsScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Reschedule Modal */}
+      {/* Reschedule Modal - FIXED BUTTONS */}
       <Modal
         visible={rescheduleModal.visible}
         transparent={true}
@@ -624,7 +624,17 @@ export default function AppointmentsScreen() {
           justifyContent: 'center',
           padding: 20
         }}>
-          <PCard style={{ padding: 20 }}>
+          <View style={{
+            backgroundColor: colors.white,
+            borderRadius: 20,
+            padding: 20,
+            maxHeight: '80%',
+            shadowColor: "#000",
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 10
+          }}>
             <Text style={{
               fontSize: 20,
               fontWeight: '700',
@@ -720,25 +730,62 @@ export default function AppointmentsScreen() {
               />
             )}
 
-            {/* Buttons */}
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <PButton
-                title="Cancel"
-                type="outline"
+            {/* Buttons - FIXED: Made them visible */}
+            <View style={{ 
+              flexDirection: 'row', 
+              gap: 12,
+              marginTop: 8
+            }}>
+              <TouchableOpacity
                 onPress={closeRescheduleModal}
-                style={{ flex: 1 }}
                 disabled={rescheduling}
-              />
-              <PButton
-                title={rescheduling ? "Saving..." : "Confirm"}
-                type="primary"
+                style={{
+                  flex: 1,
+                  borderWidth: 1.5,
+                  borderColor: colors.primary,
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  alignItems: 'center',
+                  opacity: rescheduling ? 0.5 : 1
+                }}
+              >
+                <Text style={{ 
+                  fontSize: 16, 
+                  fontWeight: "700", 
+                  color: colors.primary 
+                }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
                 onPress={confirmReschedule}
-                style={{ flex: 1 }}
-                loading={rescheduling}
                 disabled={rescheduling}
-              />
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.primary,
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  alignItems: 'center',
+                  opacity: rescheduling ? 0.5 : 1
+                }}
+              >
+                {rescheduling ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={{ 
+                    fontSize: 16, 
+                    fontWeight: "700", 
+                    color: colors.white 
+                  }}>
+                    Confirm
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
-          </PCard>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>

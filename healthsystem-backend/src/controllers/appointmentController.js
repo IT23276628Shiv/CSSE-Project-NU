@@ -1,5 +1,5 @@
 // healthsystem-backend/src/controllers/appointmentController.js
-// Updated with comprehensive date validation
+// FIXED: Improved booking logic with time slots
 
 import Appointment from "../models/Appointment.js";
 import { Notification } from "../models/AuditNotification.js";
@@ -21,6 +21,18 @@ function generateAppointmentNumber() {
   return `APT-${year}${month}${day}-${random}`;
 }
 
+// Calculate time slot end (15 minutes later)
+function calculateEndTime(startTime) {
+  if (!startTime) return null;
+  
+  const [hours, minutes] = startTime.split(':').map(Number);
+  const totalMinutes = hours * 60 + minutes + 15;
+  const endHours = Math.floor(totalMinutes / 60);
+  const endMinutes = totalMinutes % 60;
+  
+  return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+}
+
 export const listMine = asyncHandler(async (req, res) => {
   const { status, upcoming } = req.query;
   let query = { patient: req.user.id };
@@ -28,7 +40,7 @@ export const listMine = asyncHandler(async (req, res) => {
   if (status) query.status = status;
   if (upcoming === 'true') {
     query.date = { $gte: new Date() };
-    query.status = "BOOKED";
+    query.status = { $in: ["BOOKED", "CONFIRMED"] };
   }
   
   const items = await Appointment.find(query)
@@ -54,7 +66,10 @@ export const getById = asyncHandler(async (req, res) => {
 });
 
 export const create = asyncHandler(async (req, res) => {
-  const { hospital, department, doctor, date, notes } = req.body;
+  const { hospital, department, doctor, date, notes, timeSlot } = req.body;
+  
+  console.log("=== CREATE APPOINTMENT REQUEST ===");
+  console.log("Body:", JSON.stringify(req.body, null, 2));
   
   // Comprehensive validation
   const validationResults = validateFields({
@@ -65,6 +80,7 @@ export const create = asyncHandler(async (req, res) => {
   });
 
   if (!validationResults.valid) {
+    console.log("❌ Validation failed:", validationResults.errors);
     return res.status(400).json({
       error: "Validation failed",
       details: validationResults.errors
@@ -79,27 +95,38 @@ export const create = asyncHandler(async (req, res) => {
     }
   }
 
-  // Parse appointment date
   const appointmentDate = new Date(date);
+  
+  // Extract time from appointment date
+  const hours = appointmentDate.getHours();
+  const minutes = appointmentDate.getMinutes();
+  const startTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const endTime = calculateEndTime(startTime);
+  
+  console.log("✅ Parsed time slot:", { startTime, endTime });
 
-  // Check if slot is already booked (30-minute window)
+  // Check for conflicting appointments (30-minute window)
+  const conflictStart = new Date(appointmentDate.getTime() - 30 * 60 * 1000);
+  const conflictEnd = new Date(appointmentDate.getTime() + 30 * 60 * 1000);
+  
   const existingAppointment = await Appointment.findOne({
     hospital,
     department,
     date: {
-      $gte: new Date(appointmentDate.getTime() - 30 * 60 * 1000), // 30 min before
-      $lte: new Date(appointmentDate.getTime() + 30 * 60 * 1000)  // 30 min after
+      $gte: conflictStart,
+      $lte: conflictEnd
     },
     status: { $in: ["BOOKED", "CONFIRMED"] }
   });
 
   if (existingAppointment) {
+    console.log("❌ Slot conflict detected");
     return res.status(400).json({ 
       error: "Time slot already booked. Please choose a different time." 
     });
   }
 
-  // Create appointment with generated number
+  // Create appointment
   const appt = await Appointment.create({
     appointmentNumber: generateAppointmentNumber(),
     patient: req.user.id,
@@ -107,6 +134,10 @@ export const create = asyncHandler(async (req, res) => {
     department,
     doctor: doctor || undefined,
     date: appointmentDate,
+    timeSlot: {
+      start: startTime,
+      end: endTime
+    },
     reason: notes || "General consultation",
     notes,
     createdBy: {
@@ -115,7 +146,9 @@ export const create = asyncHandler(async (req, res) => {
     }
   });
 
-  // Populate references for response
+  console.log("✅ Appointment created:", appt._id);
+
+  // Populate references
   await appt.populate([
     { path: "hospital", select: "name hospitalId" },
     { path: "department", select: "name code" },
@@ -148,11 +181,12 @@ export const create = asyncHandler(async (req, res) => {
     console.error("Notification creation failed:", notifError);
   }
 
-  // Send real-time update if socket is available
+  // Send real-time update
   if (req.io) {
     req.io.to(req.user.id.toString()).emit("appointment:created", appt);
   }
   
+  console.log("=== APPOINTMENT CREATION SUCCESS ===");
   res.status(201).json(appt);
 });
 
@@ -160,84 +194,48 @@ export const cancel = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const reason = req.body?.reason || "Cancelled by patient";
   
-  console.log("=== CANCEL REQUEST ===");
-  console.log("Appointment ID:", id);
-  console.log("User ID:", req.user.id);
-  console.log("Reason:", reason);
+  const appt = await Appointment.findOne({ 
+    _id: id, 
+    patient: req.user.id 
+  });
   
-  try {
-    // Find appointment
-    const appt = await Appointment.findOne({ 
-      _id: id, 
-      patient: req.user.id 
-    });
-    
-    if (!appt) {
-      console.log("❌ Appointment not found");
-      return res.status(404).json({ error: "Appointment not found" });
-    }
-    
-    console.log("✅ Found appointment:", {
-      id: appt._id,
-      status: appt.status,
-      date: appt.date
-    });
-    
-    // Check if appointment can be cancelled
-    if (appt.status !== "BOOKED" && appt.status !== "CONFIRMED") {
-      console.log("❌ Cannot cancel - wrong status:", appt.status);
-      return res.status(400).json({ 
-        error: `Cannot cancel appointment with status: ${appt.status}` 
-      });
-    }
-
-    // Update appointment
-    appt.status = "CANCELLED";
-    appt.cancellationReason = reason;
-    appt.cancelledBy = {
-      userId: req.user.id,
-      userType: "PATIENT"
-    };
-    appt.cancelledAt = new Date();
-    
-    console.log("💾 Saving appointment...");
-    await appt.save();
-    console.log("✅ Appointment saved successfully");
-
-    // Populate for response
-    await appt.populate([
-      { path: "hospital", select: "name hospitalId" },
-      { path: "department", select: "name code" },
-      { path: "doctor", select: "fullName specialization" }
-    ]);
-
-    // Send real-time update
-    try {
-      if (req.io) {
-        req.io.to(req.user.id.toString()).emit("appointment:updated", appt);
-        console.log("📡 Socket event sent");
-      }
-    } catch (socketError) {
-      console.error("Socket error (non-critical):", socketError.message);
-    }
-    
-    console.log("=== CANCEL SUCCESS ===");
-    res.json(appt);
-    
-  } catch (error) {
-    console.error("=== CANCEL ERROR ===");
-    console.error("Error type:", error.name);
-    console.error("Error message:", error.message);
-    console.error("Full error:", error);
-    throw error;
+  if (!appt) {
+    return res.status(404).json({ error: "Appointment not found" });
   }
+  
+  if (appt.status !== "BOOKED" && appt.status !== "CONFIRMED") {
+    return res.status(400).json({ 
+      error: `Cannot cancel appointment with status: ${appt.status}` 
+    });
+  }
+
+  appt.status = "CANCELLED";
+  appt.cancellationReason = reason;
+  appt.cancelledBy = {
+    userId: req.user.id,
+    userType: "PATIENT"
+  };
+  appt.cancelledAt = new Date();
+  
+  await appt.save();
+
+  await appt.populate([
+    { path: "hospital", select: "name hospitalId" },
+    { path: "department", select: "name code" },
+    { path: "doctor", select: "fullName specialization" }
+  ]);
+
+  if (req.io) {
+    req.io.to(req.user.id.toString()).emit("appointment:updated", appt);
+  }
+  
+  res.json(appt);
 });
 
 export const reschedule = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { newDate } = req.body;
 
-  // Validate new date
   const dateValidation = validateAppointmentDate(newDate);
   if (!dateValidation.valid) {
     return res.status(400).json({
@@ -256,14 +254,23 @@ export const reschedule = asyncHandler(async (req, res) => {
   }
 
   const newAppointmentDate = new Date(newDate);
+  
+  // Extract time
+  const hours = newAppointmentDate.getHours();
+  const minutes = newAppointmentDate.getMinutes();
+  const startTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const endTime = calculateEndTime(startTime);
 
-  // Check if new slot is available
+  // Check conflicts
+  const conflictStart = new Date(newAppointmentDate.getTime() - 30 * 60 * 1000);
+  const conflictEnd = new Date(newAppointmentDate.getTime() + 30 * 60 * 1000);
+  
   const conflicting = await Appointment.findOne({
     hospital: appt.hospital._id,
     department: appt.department,
     date: {
-      $gte: new Date(newAppointmentDate.getTime() - 30 * 60 * 1000),
-      $lte: new Date(newAppointmentDate.getTime() + 30 * 60 * 1000)
+      $gte: conflictStart,
+      $lte: conflictEnd
     },
     status: { $in: ["BOOKED", "CONFIRMED"] },
     _id: { $ne: id }
@@ -275,10 +282,13 @@ export const reschedule = asyncHandler(async (req, res) => {
 
   const oldDate = appt.date;
   appt.date = newAppointmentDate;
-  appt.status = "BOOKED"; // Reset to BOOKED after rescheduling
+  appt.timeSlot = {
+    start: startTime,
+    end: endTime
+  };
+  appt.status = "BOOKED";
   await appt.save();
 
-  // Create notification
   try {
     await Notification.create({
       recipient: {
