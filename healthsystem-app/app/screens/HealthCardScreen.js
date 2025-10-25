@@ -1,5 +1,5 @@
 // healthsystem-app/app/screens/HealthCardScreen.js
-// UPDATED: Improved data fetching, state management, and refresh functionality
+// UPDATED: Fixed data display and added better debugging
 
 import React, { useState, useEffect } from "react";
 import { 
@@ -35,7 +35,14 @@ export default function HealthCardScreen() {
     try {
       setLoading(true);
       const { data } = await client.get("/patients/me");
-      console.log("Fetched user data:", data); // Debug log
+      console.log("=== HEALTH CARD DATA LOADED ===");
+      console.log("User data:", JSON.stringify(data, null, 2));
+      console.log("Allergies:", data.allergies);
+      console.log("Chronic Conditions:", data.chronicConditions);
+      console.log("Current Medications:", data.currentMedications);
+      console.log("Emergency Contact:", data.emergencyContact);
+      console.log("===============================");
+      
       setUser(prevUser => ({ ...prevUser, ...data }));
     } catch (error) {
       console.error("Failed to load user data:", error);
@@ -53,7 +60,7 @@ export default function HealthCardScreen() {
 
   // Comprehensive health card data matching MongoDB structure
   const healthCardData = {
-    _id: user?.id,
+    _id: user?._id || user?.id,
     healthCardId: user?.healthCardId,
     email: user?.email,
     fullName: user?.fullName,
@@ -238,20 +245,68 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
   const completeness = getDataCompleteness();
 
   const getAllergiesDisplay = () => {
+    console.log("Getting allergies display for:", user?.allergies);
+    
     if (!user?.allergies || user.allergies.length === 0) return null;
+    
     return user.allergies.map(a => {
+      // If it's just a string, return it
       if (typeof a === 'string') return a;
-      const allergen = a.allergen || 'Unknown';
-      const severity = a.severity || 'unknown';
-      return `${allergen} (${severity})`;
+      
+      // If it has an allergen property, use it
+      if (a.allergen) {
+        // Only show severity if it's specified and not UNKNOWN
+        if (a.severity && a.severity !== 'UNKNOWN') {
+          return `${a.allergen} (${a.severity})`;
+        }
+        return a.allergen; // Just the allergen without unknown severity
+      }
+      
+      return 'Unknown allergen';
     }).join(', ');
   };
 
   const getChronicConditionsDisplay = () => {
+    console.log("Getting chronic conditions display for:", user?.chronicConditions);
+    
     if (!user?.chronicConditions || user.chronicConditions.length === 0) return null;
+    
     return user.chronicConditions.map(c => {
+      // If it's just a string, return it
       if (typeof c === 'string') return c;
-      return c.condition || 'Unknown condition';
+      
+      // If it has a condition property, use it
+      if (c.condition) {
+        // Only show status if it's specified and meaningful
+        if (c.status && c.status !== 'ACTIVE') {
+          return `${c.condition} (${c.status})`;
+        }
+        return c.condition; // Just the condition without active status
+      }
+      
+      return 'Unknown condition';
+    }).join(', ');
+  };
+
+  const getCurrentMedicationsDisplay = () => {
+    console.log("Getting medications display for:", user?.currentMedications);
+    
+    if (!user?.currentMedications || user.currentMedications.length === 0) return null;
+    
+    return user.currentMedications.map(m => {
+      // If it's just a string, return it
+      if (typeof m === 'string') return m;
+      
+      // If it has a name property, use it
+      if (m.name) {
+        // Show dosage if available
+        if (m.dosage) {
+          return `${m.name} - ${m.dosage}`;
+        }
+        return m.name;
+      }
+      
+      return 'Unknown medication';
     }).join(', ');
   };
 
@@ -306,7 +361,7 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
           <View style={{ 
             flexDirection: 'row', 
             justifyContent: 'space-between', 
-            width: '100', 
+            width: '100%', 
             marginBottom: 20 
           }}>
             <View style={{ flex: 1 }}>
@@ -364,7 +419,7 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
 
           {/* Data Completeness Indicator */}
           <View style={{ 
-            width: '100', 
+            width: '100%', 
             backgroundColor: 'rgba(255,255,255,0.3)', 
             padding: 12, 
             borderRadius: 12,
@@ -445,23 +500,47 @@ ${user?.alternatePhone ? `📱 Alternate: ${user.alternatePhone}` : ''}
                 )}
               </View>
 
-              {getAllergiesDisplay() && (
-                <View style={{ marginBottom: 12, width: '100%' }}>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>Known Allergies</Text>
+              {/* Always show allergies section */}
+              <View style={{ marginBottom: 12, width: '100%' }}>
+                <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>Known Allergies</Text>
+                {getAllergiesDisplay() ? (
                   <Text style={{ fontSize: 14, fontWeight: "600", color: '#EF4444' }}>
                     {getAllergiesDisplay()}
                   </Text>
-                </View>
-              )}
+                ) : (
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.success }}>
+                    No known allergies
+                  </Text>
+                )}
+              </View>
 
-              {getChronicConditionsDisplay() && (
-                <View style={{ marginBottom: 12, width: '100%' }}>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>Chronic Conditions</Text>
+              {/* Always show chronic conditions section */}
+              <View style={{ marginBottom: 12, width: '100%' }}>
+                <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>Chronic Conditions</Text>
+                {getChronicConditionsDisplay() ? (
                   <Text style={{ fontSize: 14, fontWeight: "600", color: '#F59E0B' }}>
                     {getChronicConditionsDisplay()}
                   </Text>
-                </View>
-              )}
+                ) : (
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.success }}>
+                    No chronic conditions
+                  </Text>
+                )}
+              </View>
+
+              {/* Always show medications section */}
+              <View style={{ marginBottom: 12, width: '100%' }}>
+                <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>Current Medications</Text>
+                {getCurrentMedicationsDisplay() ? (
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.primary }}>
+                    {getCurrentMedicationsDisplay()}
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.success }}>
+                    No current medications
+                  </Text>
+                )}
+              </View>
             </View>
             
             <Text style={{ fontSize: 12, color: colors.primary, textAlign: 'center', marginTop: 8 }}>

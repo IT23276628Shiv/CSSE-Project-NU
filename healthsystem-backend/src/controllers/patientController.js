@@ -1,5 +1,5 @@
 // healthsystem-backend/src/controllers/patientController.js
-// Updated with comprehensive validation
+// FIXED: Proper handling of string arrays to prevent character splitting
 
 import { Patient, AuditLog } from "../models/index.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
@@ -17,16 +17,102 @@ const upload = multer({ storage: multer.memoryStorage() });
 export const avatarUploadMiddleware = upload.single("file");
 
 /**
+ * Helper function to properly handle array fields
+ * Prevents string-to-character-array conversion
+ */
+const sanitizeArrayField = (field) => {
+  if (!field) return undefined;
+  
+  // If it's already a proper array of objects/strings, return as-is
+  if (Array.isArray(field)) {
+    // Check if it's already properly formatted
+    if (field.length > 0 && typeof field[0] === 'object' && field[0].hasOwnProperty('0')) {
+      // This is a character array - reconstruct the strings
+      return field.map(item => {
+        if (typeof item === 'string') return item;
+        // Reconstruct string from character object
+        const chars = Object.keys(item)
+          .filter(key => !isNaN(key) && key !== '_id')
+          .sort((a, b) => Number(a) - Number(b))
+          .map(key => item[key]);
+        return chars.join('');
+      }).filter(item => item && item.trim());
+    }
+    return field;
+  }
+  
+  // If it's a string, try to parse it as JSON
+  if (typeof field === 'string') {
+    try {
+      const parsed = JSON.parse(field);
+      return Array.isArray(parsed) ? parsed : [field];
+    } catch {
+      return [field];
+    }
+  }
+  
+  return undefined;
+};
+
+/**
  * Get own profile (for patients)
  * GET /patients/me
  */
 export const getMe = asyncHandler(async (req, res) => {
   const me = await Patient.findById(req.user.id)
     .select("-passwordHash")
-    .populate("preferredHospital lastVisit.hospital lastVisit.department");
+    .populate("preferredHospital lastVisit.hospital lastVisit.department")
+    .lean(); // Use lean() for better performance
   
   if (!me) {
     return res.status(404).json({ error: "Patient not found" });
+  }
+
+  // ✅ FIX: Clean up character arrays in the response
+  if (me.allergies) {
+    me.allergies = me.allergies.map(a => {
+      if (typeof a === 'string') return { allergen: a };
+      if (a.hasOwnProperty('0')) {
+        // Reconstruct string from character object
+        const chars = Object.keys(a)
+          .filter(key => !isNaN(key))
+          .sort((a, b) => Number(a) - Number(b))
+          .map(key => a[key]);
+        const allergen = chars.join('');
+        return { allergen };
+      }
+      return a;
+    });
+  }
+
+  if (me.chronicConditions) {
+    me.chronicConditions = me.chronicConditions.map(c => {
+      if (typeof c === 'string') return { condition: c };
+      if (c.hasOwnProperty('0')) {
+        const chars = Object.keys(c)
+          .filter(key => !isNaN(key))
+          .sort((a, b) => Number(a) - Number(b))
+          .map(key => c[key]);
+        const condition = chars.join('');
+        return { condition };
+      }
+      return c;
+    });
+  }
+
+  if (me.currentMedications) {
+    me.currentMedications = me.currentMedications.map(m => {
+      if (typeof m === 'string') return { name: m };
+      if (m.hasOwnProperty('0')) {
+        const chars = Object.keys(m)
+          .filter(key => !isNaN(key))
+          .sort((a, b) => Number(a) - Number(b))
+          .map(key => m[key]);
+        const name = chars.join('');
+        return { name };
+      }
+      return m;
+    });
   }
 
   res.json(me);
@@ -58,7 +144,12 @@ export const updateMe = asyncHandler(async (req, res) => {
   const patch = {};
   updatable.forEach((key) => {
     if (req.body[key] !== undefined) {
-      patch[key] = req.body[key];
+      // ✅ FIX: Properly handle array fields
+      if (key === 'allergies' || key === 'chronicConditions' || key === 'currentMedications') {
+        patch[key] = sanitizeArrayField(req.body[key]);
+      } else {
+        patch[key] = req.body[key];
+      }
     }
   });
 
@@ -90,8 +181,6 @@ export const updateMe = asyncHandler(async (req, res) => {
     if (patch.emergencyContact.phone) {
       validations.emergencyContactPhone = validatePhone(patch.emergencyContact.phone);
     }
-  } else if (typeof patch.emergencyContact === 'string') {
-    validations.emergencyContact = validatePhone(patch.emergencyContact);
   }
 
   const validationResults = validateFields(validations);
@@ -103,10 +192,57 @@ export const updateMe = asyncHandler(async (req, res) => {
     });
   }
 
+  console.log("Updating patient with patch:", JSON.stringify(patch, null, 2));
+
   const updated = await Patient.findByIdAndUpdate(req.user.id, patch, { 
     new: true,
     runValidators: true 
-  }).select("-passwordHash");
+  })
+  .select("-passwordHash")
+  .lean();
+
+  // ✅ FIX: Clean up response data
+  if (updated.allergies) {
+    updated.allergies = updated.allergies.map(a => {
+      if (typeof a === 'string') return { allergen: a };
+      if (a.hasOwnProperty('0')) {
+        const chars = Object.keys(a)
+          .filter(key => !isNaN(key))
+          .sort((a, b) => Number(a) - Number(b))
+          .map(key => a[key]);
+        return { allergen: chars.join('') };
+      }
+      return a;
+    });
+  }
+
+  if (updated.chronicConditions) {
+    updated.chronicConditions = updated.chronicConditions.map(c => {
+      if (typeof c === 'string') return { condition: c };
+      if (c.hasOwnProperty('0')) {
+        const chars = Object.keys(c)
+          .filter(key => !isNaN(key))
+          .sort((a, b) => Number(a) - Number(b))
+          .map(key => c[key]);
+        return { condition: chars.join('') };
+      }
+      return c;
+    });
+  }
+
+  if (updated.currentMedications) {
+    updated.currentMedications = updated.currentMedications.map(m => {
+      if (typeof m === 'string') return { name: m };
+      if (m.hasOwnProperty('0')) {
+        const chars = Object.keys(m)
+          .filter(key => !isNaN(key))
+          .sort((a, b) => Number(a) - Number(b))
+          .map(key => m[key]);
+        return { name: chars.join('') };
+      }
+      return m;
+    });
+  }
 
   // Log audit
   await AuditLog.create({
@@ -146,17 +282,15 @@ export const uploadAvatar = asyncHandler(async (req, res) => {
   }
 
   // Validate file size (max 5MB)
-  const maxSize = 5 * 1024 * 1024; // 5MB
+  const maxSize = 5 * 1024 * 1024;
   if (req.file.size > maxSize) {
     return res.status(400).json({ 
       error: "File too large. Maximum size is 5MB" 
     });
   }
 
-  // Convert buffer to base64
   const fileStr = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
   
-  // Upload to Cloudinary
   const uploadResult = await cloudinary.uploader.upload(fileStr, {
     folder: "healthsystem/avatars/patients",
     public_id: `patient_${req.user.id}`,
@@ -167,14 +301,12 @@ export const uploadAvatar = asyncHandler(async (req, res) => {
     ]
   });
 
-  // Update patient
   const updated = await Patient.findByIdAndUpdate(
     req.user.id,
     { avatarUrl: uploadResult.secure_url },
     { new: true }
   ).select("-passwordHash");
 
-  // Log audit
   await AuditLog.create({
     user: {
       userId: req.user.id,
@@ -207,7 +339,6 @@ export const getPatientById = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: "Patient not found" });
   }
 
-  // Log access
   await AuditLog.create({
     user: {
       userId: req.user.id,
@@ -241,7 +372,6 @@ export const searchPatients = asyncHandler(async (req, res) => {
 
   const skip = (page - 1) * limit;
 
-  // Search by name, email, phone, NIC, or health card ID
   const searchQuery = {
     $or: [
       { fullName: { $regex: q, $options: "i" } },
@@ -298,11 +428,15 @@ export const updatePatient = asyncHandler(async (req, res) => {
   const patch = {};
   updatable.forEach((key) => {
     if (req.body[key] !== undefined) {
-      patch[key] = req.body[key];
+      // ✅ FIX: Properly handle array fields
+      if (key === 'allergies' || key === 'chronicConditions' || key === 'currentMedications') {
+        patch[key] = sanitizeArrayField(req.body[key]);
+      } else {
+        patch[key] = req.body[key];
+      }
     }
   });
 
-  // Validate fields that are being updated
   const validations = {};
   
   if (patch.fullName) {
@@ -339,7 +473,6 @@ export const updatePatient = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: "Patient not found" });
   }
 
-  // Log audit
   await AuditLog.create({
     user: {
       userId: req.user.id,
