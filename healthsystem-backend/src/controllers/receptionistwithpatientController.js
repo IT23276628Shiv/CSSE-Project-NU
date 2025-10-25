@@ -5,11 +5,13 @@ import Record from "../models/Record.js";
  * 📜 Get patient history by patient ID (based on Appointments)
  * Route: GET /receptionist/patients/:id/history
  */
+import Report from "../models/PatientsReports.js"; // ✅ Import your Report model
+
 export const getPatientHistory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // ✅ Step 1: Find the main patient details
+    // Step 1: Find the main patient details
     const patient = await Patient.findById(id)
       .populate("preferredHospital", "name address")
       .populate("lastVisit.hospital", "name")
@@ -20,7 +22,7 @@ export const getPatientHistory = async (req, res) => {
       return res.status(404).json({ error: "Patient not found" });
     }
 
-    // ✅ Step 2: Find all appointments
+    // Step 2: Find all appointments
     const appointments = await Appointment.find({ patient: id })
       .populate("doctor", "firstName lastName email specialization phone")
       .populate("hospital", "name")
@@ -28,18 +30,14 @@ export const getPatientHistory = async (req, res) => {
       .sort({ date: -1 })
       .lean();
 
-    // ✅ Step 3: Find all medical records
-    const records = await Record.find({ patient: id })
-      .populate("hospital", "name")
-      .populate("department", "name")
-      .populate({
-        path: "attendingDoctor",
-        select: "firstName lastName email phone specialization"
-      })
-      .sort({ visitDate: -1 })
+    // Step 3: Find all reports
+    const reports = await Report.find({ patient: id })
+      .populate("doctor", "firstName lastName email phone specialization")
+      .populate("appointment", "date hospital department")
+      .sort({ createdAt: -1 })
       .lean();
 
-    // ✅ Step 4: Combine all into one object
+    // Step 4: Combine all into one object
     const result = {
       personalInfo: {
         fullName: patient.fullName,
@@ -64,12 +62,30 @@ export const getPatientHistory = async (req, res) => {
         lastVisit: patient.lastVisit,
       },
       appointments,
-      medicalRecords: records,
+      medicalReports: reports.map((r) => ({
+        doctor: r.doctor,
+        appointment: r.appointment,
+        message: r.message,
+        createdAt: r.createdAt,
+      })),
     };
 
     res.json(result);
   } catch (error) {
     console.error("Error fetching patient full details:", error);
     res.status(500).json({ error: "Failed to fetch patient details" });
+  }
+};
+
+
+  export const updatepatient = async (req, res) => {
+  try {
+    const updateData = { ...req.body };
+    delete updateData.healthCardId; // Prevent healthCardId update
+
+    const updatedPatient = await Patient.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    res.json(updatedPatient);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };

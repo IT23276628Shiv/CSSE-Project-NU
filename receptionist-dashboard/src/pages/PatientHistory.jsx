@@ -1,43 +1,79 @@
+// src/pages/PatientHistory.js
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Table, Spinner, Alert, Button, Badge, Card, Row, Col } from "react-bootstrap";
+import {
+  Table,
+  Spinner,
+  Alert,
+  Button,
+  Badge,
+  Card,
+  Row,
+  Col,
+  Modal,
+  Form,
+} from "react-bootstrap";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
+import {
+  fetchPatientHistory,
+  updatePatient,
+  formatDate,
+  savePatientUpdates
+} from "../pages/functionsset/viewpatientfunction";
 
 export default function PatientHistory() {
   const { id } = useParams();
-  const [history, setHistory] = useState(null); // Will hold the full object
+  const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({});
+
+  // ✅ Fetch Patient History
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    const getHistory = async () => {
+      try {
+        const data = await fetchPatientHistory(id);
+        setHistory(data);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load patient history.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    getHistory();
+  }, [id]);
 
-  const fetchHistory = async () => {
-    try {
-      const res = await fetch(`http://localhost:4000/receptionist/patients/${id}/history`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
-      setHistory(data);
-    } catch (err) {
-      console.error("Error fetching history:", err);
-      setError("Failed to load patient history.");
-    } finally {
-      setLoading(false);
-    }
+  // ✅ Edit Button Click
+  const handleEdit = () => {
+    setFormData({ ...history.personalInfo });
+    setShowModal(true);
   };
 
-  const formatDate = (dateStr) => {
-    return dateStr
-      ? new Date(dateStr).toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })
-      : "—";
+  const handleClose = () => setShowModal(false);
+
+  // ✅ Handle Field Changes
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // ✅ Save Changes
+  const handleSave = async () => {
+  try {
+    const updated = await savePatientUpdates(id, formData);
+    setHistory(updated);
+    setShowModal(false);
+    alert("Patient information updated successfully!");
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
   if (loading)
     return (
@@ -48,10 +84,9 @@ export default function PatientHistory() {
     );
 
   if (error) return <Alert variant="danger">{error}</Alert>;
-
   if (!history) return <Alert variant="info">No data available.</Alert>;
 
-  const { personalInfo, appointments, medicalRecords } = history;
+  const { personalInfo, appointments, medicalReports } = history;
 
   return (
     <div className="app-container">
@@ -65,7 +100,12 @@ export default function PatientHistory() {
 
           {/* ===== Personal Info ===== */}
           <Card className="mb-4 shadow-sm">
-            <Card.Header className="bg-primary text-white fw-bold">Personal Information</Card.Header>
+            <Card.Header className="bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
+              Personal Information
+              <Button variant="warning" size="sm" onClick={handleEdit}>
+                Update
+              </Button>
+            </Card.Header>
             <Card.Body>
               <Row>
                 <Col md={3}>
@@ -110,7 +150,6 @@ export default function PatientHistory() {
                       <th>Date</th>
                       <th>Appointment No</th>
                       <th>Doctor</th>
-                      <th>Specialization</th>
                       <th>Status</th>
                       <th>Reason</th>
                       <th>Symptoms</th>
@@ -123,7 +162,6 @@ export default function PatientHistory() {
                         <td>{formatDate(a.date)}</td>
                         <td>{a.appointmentNumber}</td>
                         <td>{a.doctor ? `${a.doctor.firstName} ${a.doctor.lastName}` : "—"}</td>
-                        <td>{a.doctor?.specialization || "—"}</td>
                         <td className="text-center">
                           <Badge
                             bg={
@@ -149,35 +187,29 @@ export default function PatientHistory() {
             </Card.Body>
           </Card>
 
-          {/* ===== Medical Records ===== */}
+          {/* ===== Medical Reports ===== */}
           <Card className="mb-4 shadow-sm">
-            <Card.Header className="bg-warning text-white fw-bold">Medical Records</Card.Header>
+            <Card.Header className="bg-warning text-white fw-bold">Medical Reports</Card.Header>
             <Card.Body className="table-responsive">
-              {medicalRecords?.length === 0 ? (
-                <Alert variant="info">No medical records found.</Alert>
+              {medicalReports?.length === 0 ? (
+                <Alert variant="info">No medical reports found.</Alert>
               ) : (
                 <Table bordered hover className="align-middle">
                   <thead className="table-light text-center">
                     <tr>
                       <th>#</th>
-                      <th>Record No</th>
-                      <th>Visit Date</th>
                       <th>Doctor</th>
-                      <th>Visit Type</th>
-                      <th>Chief Complaint</th>
-                      <th>Diagnosis</th>
+                      <th>Visit Date</th>
+                      <th>Message</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {medicalRecords.map((r, i) => (
-                      <tr key={r._id}>
+                    {medicalReports.map((r, i) => (
+                      <tr key={i}>
                         <td className="text-center">{i + 1}</td>
-                        <td>{r.recordNumber}</td>
-                        <td>{formatDate(r.visitDate)}</td>
-                        <td>{r.attendingDoctor ? `${r.attendingDoctor.firstName} ${r.attendingDoctor.lastName}` : "—"}</td>
-                        <td>{r.visitType || "—"}</td>
-                        <td>{r.chiefComplaint || "—"}</td>
-                        <td>{r.diagnosis?.primary?.condition || "—"}</td>
+                        <td>{r.doctor ? `${r.doctor.firstName} ${r.doctor.lastName}` : "—"}</td>
+                        <td>{formatDate(r.appointment?.date)}</td>
+                        <td>{r.message || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -187,6 +219,84 @@ export default function PatientHistory() {
           </Card>
         </div>
       </div>
+
+      {/* ===== Update Modal ===== */}
+      <Modal show={showModal} onHide={handleClose}>
+        <Modal.Header closeButton>
+          <Modal.Title>Update Personal Information</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-2">
+              <Form.Label>Full Name</Form.Label>
+              <Form.Control
+                type="text"
+                name="fullName"
+                value={formData.fullName || ""}
+                onChange={handleChange}
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Email</Form.Label>
+              <Form.Control
+                type="email"
+                name="email"
+                value={formData.email || ""}
+                onChange={handleChange}
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Phone</Form.Label>
+              <Form.Control
+                type="text"
+                name="phone"
+                value={formData.phone || ""}
+                onChange={handleChange}
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Gender</Form.Label>
+              <Form.Select
+                name="gender"
+                value={formData.gender || ""}
+                onChange={handleChange}
+              >
+                <option value="">Select Gender</option>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+                <option value="OTHER">Other</option>
+                <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Blood Group</Form.Label>
+              <Form.Control
+                type="text"
+                name="bloodGroup"
+                value={formData.bloodGroup || ""}
+                onChange={handleChange}
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Address</Form.Label>
+              <Form.Control
+                type="text"
+                name="address"
+                value={formData.address || ""}
+                onChange={handleChange}
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSave}>
+            Save Changes
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
