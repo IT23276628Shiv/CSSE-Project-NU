@@ -51,27 +51,34 @@ export default function Login() {
   return (
     <div className="login-container">
       <form onSubmit={handleLogin} className="login-form">
-        <h2>Login</h2>
+        <h2>Welcome Back</h2>
 
         <input
           type="email"
-          placeholder="Email"
+          placeholder="Enter your email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          disabled={loading}
         />
 
         <input
           type="password"
-          placeholder="Password"
+          placeholder="Enter your password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          disabled={loading}
         />
 
         <button type="submit" disabled={loading}>
           {loading ? "Logging in..." : "Login"}
         </button>
+
+        <div className="role-info">
+          <h3>🔐 Multi-Role Access</h3>
+          <p>Login as Receptionist or Doctor with your credentials</p>
+        </div>
       </form>
     </div>
   );

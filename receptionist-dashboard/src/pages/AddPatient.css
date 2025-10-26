@@ -1,63 +1,385 @@
-/* Container for content */
-.main-container {
-  margin: 2rem auto;
-  max-width: 900px;
-}
-
-/* Card style for the form */
-.patient-card {
-  background-color: #ffffff;
+/* AddPatient.css */
+.main-content {
+  flex: 1;
   padding: 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  min-height: calc(100vh - 80px);
+}
+
+.add-patient-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* Header */
+.form-header {
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-icon {
+  font-size: 3rem;
+}
+
+.header-content h1 {
+  color: #1e293b;
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.header-content p {
+  color: #64748b;
+  margin: 0.25rem 0 0 0;
+  font-size: 1.1rem;
+}
+
+.header-stats {
+  display: flex;
+  gap: 2rem;
+}
+
+.stat {
+  text-align: center;
+  padding: 1rem;
+  background: #f0f4ff;
   border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  min-width: 120px;
 }
 
-.patient-card:hover {
-  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
+.stat-number {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e40af;
 }
 
-/* Form headings */
-.patient-card h2 {
-  font-weight: 600;
-  color: #343a40;
+.stat-label {
+  font-size: 0.875rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Form Card */
+.form-card {
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
+  background: white;
+  overflow: hidden;
+}
+
+.form-content {
+  padding: 2rem;
+}
+
+/* Form Sections */
+.form-section {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.form-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
   margin-bottom: 1.5rem;
 }
 
-/* Buttons */
-.btn-custom {
-  background-color: #007bff;
-  border-color: #007bff;
-  color: #fff;
-  transition: all 0.3s ease;
+.section-icon {
+  font-size: 1.5rem;
+  margin-top: 0.25rem;
 }
 
-.btn-custom:hover {
-  background-color: #0056b3;
-  border-color: #0056b3;
-  color: #fff;
+.section-header h3 {
+  color: #1e293b;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
 }
 
-/* Generate ID button */
-.btn-generate {
-  background-color: #6c757d;
-  border-color: #6c757d;
-  color: #fff;
-  transition: all 0.3s ease;
+.section-header p {
+  color: #64748b;
+  margin: 0;
+  font-size: 0.95rem;
 }
 
-.btn-generate:hover {
-  background-color: #5a6268;
-  border-color: #5a6268;
-}
-
-/* Form labels */
+/* Form Labels */
 .form-label {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.required {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+/* Custom Inputs */
+.custom-input {
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: #f9fafb;
+}
+
+.custom-input:focus {
+  border-color: #1e40af;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+  outline: none;
+}
+
+.custom-input::placeholder {
+  color: #9ca3af;
+}
+
+.custom-input.error {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+/* Health Card ID - Full Width */
+.health-card-id {
+  background: #f0f4ff;
+  font-weight: 600;
+  color: #1e40af;
+  border-color: #dbeafe;
+}
+
+.full-width-id {
+  flex: 1;
+}
+
+.generate-btn {
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  background: white;
+  white-space: nowrap;
+}
+
+.generate-btn:hover {
+  background: #1e40af;
+  color: white;
+  border-color: #1e40af;
+}
+
+/* File Input */
+.custom-file-input {
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #f9fafb;
+  transition: all 0.3s ease;
+}
+
+.custom-file-input:focus {
+  border-color: #1e40af;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+}
+
+/* Hints */
+.input-hint, .password-hint, .file-hint {
+  color: #64748b;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* Field Errors */
+.field-error {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Form Actions */
+.form-actions {
+  padding: 2rem;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.cancel-btn {
+  padding: 0.875rem 1.5rem;
+  border: 2px solid #d1d5db;
+  border-radius: 10px;
+  background: white;
+  color: #64748b;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  border: none;
+  border-radius: 12px;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: white;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  min-width: 200px;
+  justify-content: center;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(30, 64, 175, 0.3);
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+}
+
+.submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submit-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-icon {
+  font-size: 1.2rem;
+}
+
+.form-footer {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.footer-text {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+/* Toast Customization */
+.Toastify__toast {
+  border-radius: 10px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   font-weight: 500;
 }
 
-/* Alert styling */
-.alert-custom {
-  border-radius: 8px;
-  font-weight: 500;
+.Toastify__toast--success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.Toastify__toast--error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.Toastify__toast--info {
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 1rem;
+  }
+
+  .form-header {
+    padding: 1.5rem;
+  }
+
+  .header-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.5rem;
+  }
+
+  .header-icon {
+    font-size: 2.5rem;
+  }
+
+  .header-content h1 {
+    font-size: 1.5rem;
+  }
+
+  .form-content {
+    padding: 1rem;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .cancel-btn, .submit-btn {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .form-actions {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .header-stats {
+    gap: 1rem;
+  }
+
+  .stat {
+    min-width: 100px;
+    padding: 0.75rem;
+  }
+
+  .stat-number {
+    font-size: 1.1rem;
+  }
 }

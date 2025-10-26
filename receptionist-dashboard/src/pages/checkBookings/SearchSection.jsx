@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import api from "../../api/axiosInstance";
+import "./SearchSection.css"; // 👈 add this line
 
 export default function SearchSection({ setPatientData }) {
   const [healthId, setHealthId] = useState("");
@@ -30,8 +31,6 @@ export default function SearchSection({ setPatientData }) {
         async (decodedText) => {
           setScanResult(decodedText);
           html5Qrcode.stop();
-
-          // fetch patient data by scanned ID
           try {
             setLoading(true);
             const res = await api.get(`/receptionist/patient/${decodedText}`);
@@ -48,26 +47,51 @@ export default function SearchSection({ setPatientData }) {
   };
 
   return (
-    <div className="card p-3 mb-3 shadow-sm">
-      <div className="mb-2">
-        <label>Enter Health Card ID:</label>
-        <input
-          type="text"
-          className="form-control"
-          value={healthId}
-          onChange={(e) => setHealthId(e.target.value)}
-        />
-        <button className="btn btn-primary mt-2" onClick={handleSearch} disabled={!healthId || loading}>
-          {loading ? "Loading..." : "Search"}
-        </button>
+    <div className="search-card shadow-sm p-4">
+      <h5 className="section-title mb-3">
+        🏥 Patient Lookup
+      </h5>
+
+      <div className="search-input-group mb-4">
+        <label className="form-label">Health Card ID</label>
+        <div className="d-flex">
+          <input
+            type="text"
+            className="form-control me-2"
+            placeholder="Enter Health ID..."
+            value={healthId}
+            onChange={(e) => setHealthId(e.target.value)}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handleSearch}
+            disabled={!healthId || loading}
+          >
+            {loading ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2"></span>
+                Searching...
+              </>
+            ) : (
+              "Search"
+            )}
+          </button>
+        </div>
       </div>
 
-      <div className="mt-3">
-        <button className="btn btn-success" onClick={startScanner}>
-          Scan QR
+      <div className="qr-section text-center">
+        <h6 className="text-muted mb-2">or</h6>
+        <button className="btn btn-success scan-btn" onClick={startScanner}>
+          <i className="bi bi-qr-code-scan me-2"></i> Scan QR Code
         </button>
-        <div id="qr-reader" style={{ width: "300px", marginTop: "10px" }}></div>
-        {scanResult && <div className="alert alert-success mt-2">QR Scanned: {scanResult}</div>}
+
+        <div id="qr-reader" className="qr-reader-box mt-3"></div>
+
+        {scanResult && (
+          <div className="alert alert-success mt-3 mb-0">
+            ✅ QR Scanned: <strong>{scanResult}</strong>
+          </div>
+        )}
       </div>
     </div>
   );
