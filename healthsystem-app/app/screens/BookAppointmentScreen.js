@@ -1,5 +1,5 @@
 // healthsystem-app/app/screens/BookAppointmentScreen.js
-// FIXED: Better department loading, error handling, doctor selection, and validation
+// FIXED: Proper form reset after booking
 
 import React, { useState, useEffect } from "react";
 import { 
@@ -12,14 +12,19 @@ import {
   SafeAreaView,
   Platform,
   StatusBar,
-  ActivityIndicator
+  ActivityIndicator,
+  Dimensions,
+  RefreshControl
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from "@expo/vector-icons";
 import PCard from "../../src/components/PCard";
 import PButton from "../../src/components/PButton";
 import colors from "../../src/constants/colors";
 import client from "../../src/api/client";
+
+const { width } = Dimensions.get('window');
 
 // ====== VALIDATION FUNCTIONS ======
 const getMinimumBookingDate = () => {
@@ -64,7 +69,7 @@ const validateAppointmentDate = (date) => {
   return { valid: true, error: null };
 };
 
-export default function BookAppointmentScreen() {
+export default function BookAppointmentScreen({ navigation }) {
   const [hospitals, setHospitals] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -82,6 +87,80 @@ export default function BookAppointmentScreen() {
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [notes, setNotes] = useState("");
   const [dateError, setDateError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadHospitals = async () => {
+    try {
+      setLoadingData(true);
+      const { data } = await client.get("/hospitals?isActive=true");
+      
+      if (!data.hospitals || data.hospitals.length === 0) {
+        setHospitals([]);
+        return;
+      }
+      
+      setHospitals(data.hospitals || []);
+    } catch (error) {
+      console.error("Failed to load hospitals:", error);
+      setHospitals([]);
+    } finally {
+      setLoadingData(false);
+      setRefreshing(false);
+    }
+  };
+
+  const loadDepartments = async (hospitalId) => {
+    try {
+      setLoadingDepartments(true);
+      setDepartments([]);
+      setSelectedDepartment(null);
+      setDoctors([]);
+      setSelectedDoctor(null);
+      
+      const { data } = await client.get(`/departments?hospital=${hospitalId}&isActive=true`);
+      setDepartments(data.departments || []);
+    } catch (error) {
+      console.error("Failed to load departments:", error);
+      setDepartments([]);
+    } finally {
+      setLoadingDepartments(false);
+    }
+  };
+
+  const loadDoctors = async (hospitalId, departmentId) => {
+    try {
+      setLoadingDoctors(true);
+      setDoctors([]);
+      setSelectedDoctor(null);
+      
+      const { data } = await client.get(
+        `/staff/doctors/available?hospital=${hospitalId}&department=${departmentId}`
+      );
+      setDoctors(data || []);
+    } catch (error) {
+      console.error("Failed to load doctors:", error);
+      setDoctors([]);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
+
+  // ====== NEW: FORM RESET FUNCTION ======
+  const resetForm = () => {
+    console.log("Resetting form...");
+    setSelectedHospital(null);
+    setSelectedDepartment(null);
+    setSelectedDoctor(null);
+    setDepartments([]);
+    setDoctors([]);
+    setNotes("");
+    setDate(getMinimumBookingDate());
+    setDateError(null);
+    setShowHospitalPicker(false);
+    setShowDepartmentPicker(false);
+    setShowDoctorPicker(false);
+    setShowDatePicker(false);
+  };
 
   useEffect(() => {
     loadHospitals();
@@ -107,86 +186,9 @@ export default function BookAppointmentScreen() {
     }
   }, [selectedDepartment]);
 
-  const loadHospitals = async () => {
-    try {
-      setLoadingData(true);
-      const { data } = await client.get("/hospitals?isActive=true");
-      
-      if (!data.hospitals || data.hospitals.length === 0) {
-        Alert.alert("No Hospitals", "No hospitals are currently available for booking.");
-        setHospitals([]);
-        return;
-      }
-      
-      setHospitals(data.hospitals || []);
-    } catch (error) {
-      console.error("Failed to load hospitals:", error);
-      Alert.alert(
-        "Error", 
-        error.message || "Failed to load hospitals. Please check your connection and try again."
-      );
-      setHospitals([]);
-    } finally {
-      setLoadingData(false);
-    }
-  };
-
-  const loadDepartments = async (hospitalId) => {
-    try {
-      setLoadingDepartments(true);
-      setDepartments([]);
-      setSelectedDepartment(null);
-      setDoctors([]);
-      setSelectedDoctor(null);
-      
-      const { data } = await client.get(`/departments?hospital=${hospitalId}&isActive=true`);
-      
-      if (!data.departments || data.departments.length === 0) {
-        Alert.alert(
-          "No Departments", 
-          "This hospital has no active departments available for appointments."
-        );
-        setDepartments([]);
-        return;
-      }
-      
-      setDepartments(data.departments || []);
-    } catch (error) {
-      console.error("Failed to load departments:", error);
-      Alert.alert(
-        "Error", 
-        error.message || "Failed to load departments. Please try again."
-      );
-      setDepartments([]);
-    } finally {
-      setLoadingDepartments(false);
-    }
-  };
-
-  const loadDoctors = async (hospitalId, departmentId) => {
-    try {
-      setLoadingDoctors(true);
-      setDoctors([]);
-      setSelectedDoctor(null);
-      
-      const { data } = await client.get(
-        `/staff/doctors/available?hospital=${hospitalId}&department=${departmentId}`
-      );
-      
-      if (!data || data.length === 0) {
-        // No doctors available is OK - booking can proceed without specific doctor
-        setDoctors([]);
-        return;
-      }
-      
-      setDoctors(data || []);
-    } catch (error) {
-      console.error("Failed to load doctors:", error);
-      // Don't show error alert - doctor selection is optional
-      setDoctors([]);
-    } finally {
-      setLoadingDoctors(false);
-    }
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadHospitals();
   };
 
   const handleDateChange = (event, selectedDate) => {
@@ -200,7 +202,6 @@ export default function BookAppointmentScreen() {
   };
 
   const submit = async () => {
-    // Validate all required fields
     if (!selectedHospital) {
       Alert.alert("Missing Information", "Please select a hospital");
       return;
@@ -216,7 +217,6 @@ export default function BookAppointmentScreen() {
       return;
     }
 
-    // Validate date
     const dateValidation = validateAppointmentDate(date);
     if (!dateValidation.valid) {
       setDateError(dateValidation.error);
@@ -224,7 +224,6 @@ export default function BookAppointmentScreen() {
       return;
     }
 
-    // Validate notes length
     if (notes.length > 500) {
       Alert.alert("Notes Too Long", "Additional notes must be less than 500 characters");
       return;
@@ -239,33 +238,41 @@ export default function BookAppointmentScreen() {
         notes: notes.trim() || undefined
       };
 
-      // Add doctor if selected
       if (selectedDoctor) {
         payload.doctor = selectedDoctor._id;
       }
 
       await client.post("/appointments", payload);
       
+      // ====== FIXED: Proper success handling with form reset ======
       Alert.alert(
-        "Success", 
-        "Appointment booked successfully!", 
+        "🎉 Success!", 
+        "Your appointment has been booked successfully!",
         [
           { 
-            text: "OK", 
+            text: "View Appointments", 
+            onPress: () => navigation.navigate('Appointments')
+          },
+          { 
+            text: "Book Another", 
+            style: "default",
             onPress: () => {
-              // Reset form
-              setSelectedHospital(null);
-              setSelectedDepartment(null);
-              setSelectedDoctor(null);
-              setDepartments([]);
-              setDoctors([]);
-              setNotes("");
-              setDate(getMinimumBookingDate());
-              setDateError(null);
+              // Reset form immediately when "Book Another" is pressed
+              resetForm();
             }
           }
-        ]
+        ],
+        {
+          // This callback runs when alert is dismissed (by tapping outside)
+          onDismiss: () => {
+            // Auto-reset form after 2 seconds if user doesn't choose an option
+            setTimeout(() => {
+              resetForm();
+            }, 2000);
+          }
+        }
       );
+      
     } catch (error) {
       console.error("Booking error:", error);
       Alert.alert(
@@ -288,393 +295,891 @@ export default function BookAppointmentScreen() {
     });
   };
 
+  // ====== NEW: Quick Clear Button ======
+  const ClearFormButton = () => (
+    <TouchableOpacity
+      onPress={resetForm}
+      style={{
+        position: 'absolute',
+        top: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 50,
+        right: 20,
+        backgroundColor: `${colors.danger}15`,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 15,
+        flexDirection: 'row',
+        alignItems: 'center',
+        zIndex: 1000
+      }}
+    >
+      <Ionicons name="close-circle" size={16} color={colors.danger} />
+      <Text style={{ color: colors.danger, fontSize: 12, fontWeight: '700', marginLeft: 4 }}>
+        Clear
+      </Text>
+    </TouchableOpacity>
+  );
+
   if (loadingData) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={{ marginTop: 16, color: colors.textMuted }}>Loading hospitals...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: '#F8F7FF', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 16, color: colors.textMuted, fontSize: 14 }}>Loading hospitals...</Text>
+      </View>
     );
   }
 
   if (hospitals.length === 0) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <Ionicons name="alert-circle-outline" size={64} color={colors.textMuted} />
-          <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text, marginTop: 16, textAlign: 'center' }}>
-            No Hospitals Available
-          </Text>
-          <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 8, textAlign: 'center' }}>
-            There are no hospitals available for booking at the moment.
-          </Text>
-          <PButton 
-            title="Retry" 
-            onPress={loadHospitals} 
-            style={{ marginTop: 20 }}
-          />
-        </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8F7FF' }} edges={['bottom']}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F8F7FF" />
+        <ScrollView
+          contentContainerStyle={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 30,
+            padding: 32,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: '#E8E0FF',
+            shadowColor: colors.primary,
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2
+          }}>
+            <View style={{
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              backgroundColor: '#F0EDFF',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 24
+            }}>
+              <Ionicons name="business-outline" size={50} color={colors.primary} />
+            </View>
+            <Text style={{ fontSize: 22, fontWeight: "800", color: colors.text, marginBottom: 12, textAlign: 'center' }}>
+              No Hospitals Available
+            </Text>
+            <Text style={{ fontSize: 15, color: colors.textMuted, marginBottom: 28, textAlign: 'center', lineHeight: 22 }}>
+              There are no hospitals available for booking at the moment. Please check back later or pull down to refresh.
+            </Text>
+            <TouchableOpacity 
+              onPress={loadHospitals}
+              style={{
+                backgroundColor: colors.primary,
+                paddingHorizontal: 32,
+                paddingVertical: 16,
+                borderRadius: 25,
+                shadowColor: colors.primary,
+                shadowOpacity: 0.3,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 5
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: "700" }}>
+                Try Again
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView 
-      style={{
-        flex: 1, 
-        backgroundColor: colors.background,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 8 : 0
-      }}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8F7FF' }} edges={['bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F7FF" />
+
+      {/* Clear Form Button - Only show when form has data */}
+      {(selectedHospital || selectedDepartment || selectedDoctor || notes) && (
+        <ClearFormButton />
+      )}
+
       <ScrollView 
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        contentContainerStyle={{
+          paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+          paddingBottom: 100,
+        }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
       >
-        {/* Hospital */}
-        <PCard style={{ marginBottom: 16 }}>
-          <Text style={{ fontWeight: "700", color: colors.text, fontSize: 16, marginBottom: 8 }}>
-            Hospital *
-          </Text>
-          <TouchableOpacity
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
-              padding: 16,
-              backgroundColor: colors.background,
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-            onPress={() => setShowHospitalPicker(!showHospitalPicker)}
-          >
-            <Text style={{ 
-              color: selectedHospital ? colors.text : colors.textMuted,
-              fontSize: 16,
-              flex: 1
-            }}>
-              {selectedHospital ? selectedHospital.name : "Select hospital"}
-            </Text>
-            <Ionicons name={showHospitalPicker ? "chevron-up" : "chevron-down"} size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          {showHospitalPicker && (
-            <ScrollView 
-              style={{ 
-                maxHeight: 200,
-                marginTop: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 12,
-                backgroundColor: colors.white
-              }}
-              nestedScrollEnabled={true}
-            >
-              {hospitals.map((hosp) => (
-                <TouchableOpacity
-                  key={hosp._id}
-                  style={{
-                    padding: 16,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                    backgroundColor: selectedHospital?._id === hosp._id ? `${colors.primary}10` : 'transparent'
-                  }}
-                  onPress={() => {
-                    setSelectedHospital(hosp);
-                    setShowHospitalPicker(false);
-                  }}
-                >
-                  <Text style={{ 
-                    fontSize: 16,
-                    fontWeight: selectedHospital?._id === hosp._id ? '600' : '400',
-                    color: selectedHospital?._id === hosp._id ? colors.primary : colors.text
-                  }}>
-                    {hosp.name}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                    {hosp.type} • {hosp.address?.city}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-        </PCard>
-
-        {/* Department */}
-        <PCard style={{ marginBottom: 16 }}>
-          <Text style={{ fontWeight: "700", color: colors.text, fontSize: 16, marginBottom: 8 }}>
-            Department *
-          </Text>
-          <TouchableOpacity
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
-              padding: 16,
-              backgroundColor: !selectedHospital ? colors.border : colors.background,
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-            onPress={() => selectedHospital && setShowDepartmentPicker(!showDepartmentPicker)}
-            disabled={!selectedHospital || loadingDepartments}
-          >
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-              {loadingDepartments && (
-                <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
-              )}
-              <Text style={{ 
-                color: selectedDepartment ? colors.text : colors.textMuted,
-                fontSize: 16,
-                flex: 1
+        {/* Header Section */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10 }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 25,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: '#E8E0FF',
+            shadowColor: colors.primary,
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: '#F0EDFF',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 16
               }}>
-                {loadingDepartments 
-                  ? "Loading departments..." 
-                  : selectedDepartment 
-                    ? selectedDepartment.name 
-                    : !selectedHospital 
-                      ? "Select hospital first" 
-                      : departments.length === 0 
-                        ? "No departments available"
-                        : "Select department"}
-              </Text>
-            </View>
-            <Ionicons name={showDepartmentPicker ? "chevron-up" : "chevron-down"} size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          {showDepartmentPicker && departments.length > 0 && (
-            <ScrollView 
-              style={{ 
-                maxHeight: 200,
-                marginTop: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 12,
-                backgroundColor: colors.white
-              }}
-              nestedScrollEnabled={true}
-            >
-              {departments.map((dept) => (
-                <TouchableOpacity
-                  key={dept._id}
-                  style={{
-                    padding: 16,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                    backgroundColor: selectedDepartment?._id === dept._id ? `${colors.primary}10` : 'transparent'
-                  }}
-                  onPress={() => {
-                    setSelectedDepartment(dept);
-                    setShowDepartmentPicker(false);
-                  }}
-                >
-                  <Text style={{ 
-                    fontSize: 16,
-                    fontWeight: selectedDepartment?._id === dept._id ? '600' : '400',
-                    color: selectedDepartment?._id === dept._id ? colors.primary : colors.text
-                  }}>
-                    {dept.name}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                    {dept.code} • {dept.category}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-        </PCard>
-
-        {/* Doctor (Optional) */}
-        {selectedDepartment && (
-          <PCard style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={{ fontWeight: "700", color: colors.text, fontSize: 16 }}>
-                Doctor
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textMuted, marginLeft: 8 }}>
-                (Optional)
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={{
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 12,
-                padding: 16,
-                backgroundColor: colors.background,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-              onPress={() => doctors.length > 0 && setShowDoctorPicker(!showDoctorPicker)}
-              disabled={loadingDoctors}
-            >
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                {loadingDoctors && (
-                  <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
-                )}
-                <Text style={{ 
-                  color: selectedDoctor ? colors.text : colors.textMuted,
-                  fontSize: 16,
-                  flex: 1
-                }}>
-                  {loadingDoctors 
-                    ? "Loading doctors..." 
-                    : selectedDoctor 
-                      ? `Dr. ${selectedDoctor.fullName}` 
-                      : doctors.length === 0 
-                        ? "Any available doctor"
-                        : "Select a doctor"}
+                <Ionicons name="calendar" size={28} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 4 }}>
+                  Book Appointment
+                </Text>
+                <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '500' }}>
+                  Schedule your visit in few simple steps
                 </Text>
               </View>
-              {doctors.length > 0 && (
-                <Ionicons name={showDoctorPicker ? "chevron-up" : "chevron-down"} size={20} color={colors.textMuted} />
-              )}
-            </TouchableOpacity>
-
-            {showDoctorPicker && doctors.length > 0 && (
-              <ScrollView 
-                style={{ 
-                  maxHeight: 200,
-                  marginTop: 8,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 12,
-                  backgroundColor: colors.white
-                }}
-                nestedScrollEnabled={true}
-              >
-                {doctors.map((doc) => (
-                  <TouchableOpacity
-                    key={doc._id}
-                    style={{
-                      padding: 16,
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
-                      backgroundColor: selectedDoctor?._id === doc._id ? `${colors.primary}10` : 'transparent'
-                    }}
-                    onPress={() => {
-                      setSelectedDoctor(doc);
-                      setShowDoctorPicker(false);
-                    }}
-                  >
-                    <Text style={{ 
-                      fontSize: 16,
-                      fontWeight: selectedDoctor?._id === doc._id ? '600' : '400',
-                      color: selectedDoctor?._id === doc._id ? colors.primary : colors.text
-                    }}>
-                      Dr. {doc.fullName}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                      {doc.specialization}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </PCard>
-        )}
-
-        {/* Date & Time */}
-        <PCard style={{ marginBottom: 16 }}>
-          <Text style={{ fontWeight: "700", color: colors.text, fontSize: 16, marginBottom: 8 }}>
-            Date & Time *
-          </Text>
-          
-          <View style={{ 
-            backgroundColor: '#FFF3CD', 
-            padding: 12, 
-            borderRadius: 8, 
-            marginBottom: 12,
-            borderLeftWidth: 4,
-            borderLeftColor: '#F59E0B'
-          }}>
-            <Text style={{ fontSize: 12, color: '#856404', lineHeight: 18 }}>
-              ⓘ Appointments must be booked at least 24 hours in advance (8 AM - 8 PM)
-            </Text>
+            </View>
           </View>
+        </View>
 
-          <TouchableOpacity
-            style={{
-              borderWidth: 1,
-              borderColor: dateError ? colors.danger : colors.border,
-              borderRadius: 12,
-              padding: 16,
-              backgroundColor: colors.background,
-              flexDirection: 'row',
-              alignItems: 'center'
-            }}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Ionicons name="calendar" size={20} color={colors.primary} style={{ marginRight: 12 }} />
-            <Text style={{ color: colors.text, fontSize: 16, flex: 1 }}>
-              {formatDisplayDate(date)}
-            </Text>
-          </TouchableOpacity>
-          
-          {dateError && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-              <Ionicons name="alert-circle" size={16} color={colors.danger} />
-              <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 4 }}>
-                {dateError}
+        {/* Progress Steps */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            {['Hospital', 'Department', 'Doctor', 'Time'].map((step, index) => {
+              const isCompleted = 
+                (index === 0 && selectedHospital) ||
+                (index === 1 && selectedDepartment) ||
+                (index === 2 && (doctors.length === 0 || selectedDoctor)) ||
+                (index === 3 && date && !dateError);
+              
+              const isActive = 
+                (index === 0 && !selectedHospital) ||
+                (index === 1 && selectedHospital && !selectedDepartment) ||
+                (index === 2 && selectedDepartment && !selectedDoctor && doctors.length > 0) ||
+                (index === 3 && selectedDepartment && date);
+
+              return (
+                <View key={step} style={{ alignItems: 'center', flex: 1 }}>
+                  <View style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: isCompleted ? colors.primary : isActive ? '#F0EDFF' : '#F0F0F0',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 2,
+                    borderColor: isCompleted ? colors.primary : isActive ? colors.primary : 'transparent'
+                  }}>
+                    {isCompleted ? (
+                      <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                    ) : (
+                      <Text style={{ 
+                        fontSize: 12, 
+                        fontWeight: '700', 
+                        color: isActive ? colors.primary : colors.textMuted 
+                      }}>
+                        {index + 1}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={{ 
+                    fontSize: 10, 
+                    fontWeight: '600', 
+                    color: isCompleted || isActive ? colors.primary : colors.textMuted,
+                    marginTop: 6,
+                    textAlign: 'center'
+                  }}>
+                    {step}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Form Content */}
+        <View style={{ padding: 20, paddingTop: 0 }}>
+
+          {/* Hospital Selection */}
+          <View style={{ marginBottom: 24 }}>
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>
+                Select Hospital
+              </Text>
+              <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                Choose where you'd like to visit
               </Text>
             </View>
-          )}
-          
-          {showDatePicker && (
-            <DateTimePicker
-              value={date}
-              mode="datetime"
-              display="default"
-              onChange={handleDateChange}
-              minimumDate={getMinimumBookingDate()}
-              maximumDate={getMaximumBookingDate()}
-            />
-          )}
-        </PCard>
 
-        {/* Additional Notes */}
-        <PCard style={{ marginBottom: 24 }}>
-          <Text style={{ fontWeight: "700", color: colors.text, fontSize: 16, marginBottom: 8 }}>
-            Additional Notes
-          </Text>
-          <TextInput
-            placeholder="Any specific concerns or requirements..."
-            value={notes}
-            onChangeText={setNotes}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 20,
+                padding: 20,
+                borderWidth: 2,
+                borderColor: selectedHospital ? colors.primary : '#F0EDFF',
+                shadowColor: selectedHospital ? colors.primary : "#000",
+                shadowOpacity: selectedHospital ? 0.1 : 0.03,
+                shadowRadius: selectedHospital ? 12 : 8,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: selectedHospital ? 4 : 2
+              }}
+              onPress={() => setShowHospitalPicker(!showHospitalPicker)}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <View style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: selectedHospital ? `${colors.primary}15` : '#F8F7FF',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14
+                  }}>
+                    <Ionicons 
+                      name="business" 
+                      size={22} 
+                      color={selectedHospital ? colors.primary : colors.textMuted} 
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ 
+                      fontSize: 16, 
+                      fontWeight: '700', 
+                      color: selectedHospital ? colors.text : colors.textMuted 
+                    }}>
+                      {selectedHospital ? selectedHospital.name : "Select hospital"}
+                    </Text>
+                    {selectedHospital && (
+                      <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                        {selectedHospital.type} • {selectedHospital.address?.city}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <Ionicons 
+                  name={showHospitalPicker ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color={colors.textMuted} 
+                />
+              </View>
+            </TouchableOpacity>
+
+            {showHospitalPicker && (
+              <View style={{ 
+                marginTop: 12,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: '#E8E0FF',
+                shadowColor: "#000",
+                shadowOpacity: 0.05,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 2 },
+                elevation: 3
+              }}>
+                <ScrollView 
+                  style={{ maxHeight: 200 }}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {hospitals.map((hosp) => (
+                    <TouchableOpacity
+                      key={hosp._id}
+                      style={{
+                        padding: 18,
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#F0F0F0',
+                        backgroundColor: selectedHospital?._id === hosp._id ? `${colors.primary}08` : 'transparent',
+                        flexDirection: 'row',
+                        alignItems: 'center'
+                      }}
+                      onPress={() => {
+                        setSelectedHospital(hosp);
+                        setShowHospitalPicker(false);
+                      }}
+                    >
+                      <View style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: selectedHospital?._id === hosp._id ? colors.primary : '#F0F0F0',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 12
+                      }}>
+                        <Ionicons 
+                          name="business" 
+                          size={18} 
+                          color={selectedHospital?._id === hosp._id ? '#FFFFFF' : colors.textMuted} 
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ 
+                          fontSize: 15,
+                          fontWeight: selectedHospital?._id === hosp._id ? '700' : '600',
+                          color: selectedHospital?._id === hosp._id ? colors.primary : colors.text,
+                          marginBottom: 2
+                        }}>
+                          {hosp.name}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          {hosp.type} • {hosp.address?.city}
+                        </Text>
+                      </View>
+                      {selectedHospital?._id === hosp._id && (
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+
+          {/* Department Selection */}
+          {selectedHospital && (
+            <View style={{ marginBottom: 24 }}>
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>
+                  Select Department
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                  Choose your medical department
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 20,
+                  padding: 20,
+                  borderWidth: 2,
+                  borderColor: selectedDepartment ? '#22C55E' : '#F0EDFF',
+                  shadowColor: selectedDepartment ? '#22C55E' : "#000",
+                  shadowOpacity: selectedDepartment ? 0.1 : 0.03,
+                  shadowRadius: selectedDepartment ? 12 : 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: selectedDepartment ? 4 : 2
+                }}
+                onPress={() => selectedHospital && setShowDepartmentPicker(!showDepartmentPicker)}
+                disabled={!selectedHospital || loadingDepartments}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    {loadingDepartments && (
+                      <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 12 }} />
+                    )}
+                    <View style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: selectedDepartment ? `${colors.success}15` : '#F8F7FF',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 14
+                    }}>
+                      <Ionicons 
+                        name="medical" 
+                        size={22} 
+                        color={selectedDepartment ? colors.success : colors.textMuted} 
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ 
+                        fontSize: 16, 
+                        fontWeight: '700', 
+                        color: selectedDepartment ? colors.text : colors.textMuted 
+                      }}>
+                        {loadingDepartments 
+                          ? "Loading departments..." 
+                          : selectedDepartment 
+                            ? selectedDepartment.name 
+                            : departments.length === 0 
+                              ? "No departments available"
+                              : "Select department"}
+                      </Text>
+                      {selectedDepartment && (
+                        <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                          {selectedDepartment.code} • {selectedDepartment.category}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {!loadingDepartments && departments.length > 0 && (
+                    <Ionicons 
+                      name={showDepartmentPicker ? "chevron-up" : "chevron-down"} 
+                      size={20} 
+                      color={colors.textMuted} 
+                    />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {showDepartmentPicker && departments.length > 0 && (
+                <View style={{ 
+                  marginTop: 12,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#E8E0FF',
+                  shadowColor: "#000",
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 2 },
+                  elevation: 3
+                }}>
+                  <ScrollView 
+                    style={{ maxHeight: 200 }}
+                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {departments.map((dept) => (
+                      <TouchableOpacity
+                        key={dept._id}
+                        style={{
+                          padding: 18,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#F0F0F0',
+                          backgroundColor: selectedDepartment?._id === dept._id ? `${colors.success}08` : 'transparent',
+                          flexDirection: 'row',
+                          alignItems: 'center'
+                        }}
+                        onPress={() => {
+                          setSelectedDepartment(dept);
+                          setShowDepartmentPicker(false);
+                        }}
+                      >
+                        <View style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: selectedDepartment?._id === dept._id ? colors.success : '#F0F0F0',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 12
+                        }}>
+                          <Ionicons 
+                            name="medical" 
+                            size={18} 
+                            color={selectedDepartment?._id === dept._id ? '#FFFFFF' : colors.textMuted} 
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ 
+                            fontSize: 15,
+                            fontWeight: selectedDepartment?._id === dept._id ? '700' : '600',
+                            color: selectedDepartment?._id === dept._id ? colors.success : colors.text,
+                            marginBottom: 2
+                          }}>
+                            {dept.name}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                            {dept.code} • {dept.category}
+                          </Text>
+                        </View>
+                        {selectedDepartment?._id === dept._id && (
+                          <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Doctor Selection (Optional) */}
+          {selectedDepartment && doctors.length > 0 && (
+            <View style={{ marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>
+                  Select Doctor
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.textMuted, marginLeft: 8, backgroundColor: `${colors.primary}15`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                  Optional
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 20,
+                  padding: 20,
+                  borderWidth: 2,
+                  borderColor: selectedDoctor ? '#F59E0B' : '#F0EDFF',
+                  shadowColor: selectedDoctor ? '#F59E0B' : "#000",
+                  shadowOpacity: selectedDoctor ? 0.1 : 0.03,
+                  shadowRadius: selectedDoctor ? 12 : 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: selectedDoctor ? 4 : 2
+                }}
+                onPress={() => doctors.length > 0 && setShowDoctorPicker(!showDoctorPicker)}
+                disabled={loadingDoctors}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    {loadingDoctors && (
+                      <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 12 }} />
+                    )}
+                    <View style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: selectedDoctor ? `${colors.warning}15` : '#F8F7FF',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 14
+                    }}>
+                      <Ionicons 
+                        name="person" 
+                        size={22} 
+                        color={selectedDoctor ? colors.warning : colors.textMuted} 
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ 
+                        fontSize: 16, 
+                        fontWeight: '700', 
+                        color: selectedDoctor ? colors.text : colors.textMuted 
+                      }}>
+                        {loadingDoctors 
+                          ? "Loading doctors..." 
+                          : selectedDoctor 
+                            ? `Dr. ${selectedDoctor.fullName}` 
+                            : "Select a doctor"}
+                      </Text>
+                      {selectedDoctor && (
+                        <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                          {selectedDoctor.specialization}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {!loadingDoctors && doctors.length > 0 && (
+                    <Ionicons 
+                      name={showDoctorPicker ? "chevron-up" : "chevron-down"} 
+                      size={20} 
+                      color={colors.textMuted} 
+                    />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {showDoctorPicker && doctors.length > 0 && (
+                <View style={{ 
+                  marginTop: 12,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#E8E0FF',
+                  shadowColor: "#000",
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 2 },
+                  elevation: 3
+                }}>
+                  <ScrollView 
+                    style={{ maxHeight: 200 }}
+                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {doctors.map((doc) => (
+                      <TouchableOpacity
+                        key={doc._id}
+                        style={{
+                          padding: 18,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#F0F0F0',
+                          backgroundColor: selectedDoctor?._id === doc._id ? `${colors.warning}08` : 'transparent',
+                          flexDirection: 'row',
+                          alignItems: 'center'
+                        }}
+                        onPress={() => {
+                          setSelectedDoctor(doc);
+                          setShowDoctorPicker(false);
+                        }}
+                      >
+                        <View style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: selectedDoctor?._id === doc._id ? colors.warning : '#F0F0F0',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 12
+                        }}>
+                          <Text style={{ 
+                            color: selectedDoctor?._id === doc._id ? '#FFFFFF' : colors.textMuted, 
+                            fontWeight: '700', 
+                            fontSize: 14 
+                          }}>
+                            {doc.fullName?.charAt(0) || 'D'}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ 
+                            fontSize: 15,
+                            fontWeight: selectedDoctor?._id === doc._id ? '700' : '600',
+                            color: selectedDoctor?._id === doc._id ? colors.warning : colors.text,
+                            marginBottom: 2
+                          }}>
+                            Dr. {doc.fullName}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                            {doc.specialization}
+                          </Text>
+                        </View>
+                        {selectedDoctor?._id === doc._id && (
+                          <Ionicons name="checkmark-circle" size={20} color={colors.warning} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Date & Time Selection */}
+          {selectedDepartment && (
+            <View style={{ marginBottom: 24 }}>
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>
+                  Select Date & Time
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                  Choose your preferred appointment time
+                </Text>
+              </View>
+
+              <View style={{ 
+                backgroundColor: '#FFF3CD', 
+                padding: 16, 
+                borderRadius: 16, 
+                marginBottom: 16,
+                borderLeftWidth: 4,
+                borderLeftColor: '#F59E0B',
+                flexDirection: 'row',
+                alignItems: 'flex-start'
+              }}>
+                <Ionicons name="information-circle" size={20} color="#F59E0B" style={{ marginRight: 8, marginTop: 2 }} />
+                <Text style={{ fontSize: 13, color: '#856404', lineHeight: 18, flex: 1 }}>
+                  Appointments must be booked at least 24 hours in advance (8 AM - 8 PM)
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 20,
+                  padding: 20,
+                  borderWidth: 2,
+                  borderColor: date && !dateError ? colors.primary : dateError ? colors.danger : '#F0EDFF',
+                  shadowColor: date && !dateError ? colors.primary : "#000",
+                  shadowOpacity: date && !dateError ? 0.1 : 0.03,
+                  shadowRadius: date && !dateError ? 12 : 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: date && !dateError ? 4 : 2,
+                  flexDirection: 'row',
+                  alignItems: 'center'
+                }}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <LinearGradient
+                  colors={['#7B61FF', '#6F4BFF']}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14
+                  }}
+                >
+                  <Ionicons name="calendar" size={22} color="#FFFFFF" />
+                </LinearGradient>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
+                    {formatDisplayDate(date)}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                    Tap to change date & time
+                  </Text>
+                </View>
+                <Ionicons name="time" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+              
+              {dateError && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingHorizontal: 8 }}>
+                  <Ionicons name="alert-circle" size={16} color={colors.danger} />
+                  <Text style={{ color: colors.danger, fontSize: 13, marginLeft: 6, fontWeight: '500' }}>
+                    {dateError}
+                  </Text>
+                </View>
+              )}
+              
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date}
+                  mode="datetime"
+                  display="default"
+                  onChange={handleDateChange}
+                  minimumDate={getMinimumBookingDate()}
+                  maximumDate={getMaximumBookingDate()}
+                />
+              )}
+            </View>
+          )}
+
+          {/* Additional Notes */}
+          {selectedDepartment && (
+            <View style={{ marginBottom: 32 }}>
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>
+                  Additional Notes
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                  Any specific concerns or requirements
+                </Text>
+              </View>
+
+              <View style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 20,
+                padding: 20,
+                borderWidth: 1,
+                borderColor: '#E8E0FF',
+                shadowColor: "#000",
+                shadowOpacity: 0.03,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 2 },
+                elevation: 2
+              }}>
+                <TextInput
+                  placeholder="Describe your symptoms, concerns, or any special requirements..."
+                  placeholderTextColor={colors.textMuted}
+                  value={notes}
+                  onChangeText={setNotes}
+                  style={{
+                    color: colors.text,
+                    minHeight: 100,
+                    textAlignVertical: 'top',
+                    fontSize: 15,
+                    lineHeight: 20
+                  }}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={500}
+                />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+                    <Text style={{ fontSize: 11, color: colors.textMuted, marginLeft: 4 }}>
+                      Optional but helpful for doctors
+                    </Text>
+                  </View>
+                  <Text style={{ 
+                    fontSize: 11, 
+                    color: notes.length >= 450 ? colors.danger : colors.textMuted,
+                    fontWeight: notes.length >= 450 ? '700' : '400'
+                  }}>
+                    {notes.length}/500
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Submit Button */}
+          {selectedDepartment && (
+            <TouchableOpacity
+              onPress={submit}
+              disabled={!selectedHospital || !selectedDepartment || !date || !!dateError || loading}
+              style={{
+                backgroundColor: (!selectedHospital || !selectedDepartment || !date || !!dateError) ? 
+                  `${colors.primary}40` : colors.primary,
+                paddingVertical: 18,
+                borderRadius: 25,
+                shadowColor: colors.primary,
+                shadowOpacity: (!selectedHospital || !selectedDepartment || !date || !!dateError) ? 0 : 0.3,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: (!selectedHospital || !selectedDepartment || !date || !!dateError) ? 0 : 5,
+                alignItems: 'center'
+              }}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: "700" }}>
+                  Confirm Appointment
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {/* Booking Info Card */}
+          <LinearGradient
+            colors={["#EFF6FF", "#DBEAFE"]}
             style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
-              padding: 16,
-              backgroundColor: colors.background,
-              color: colors.text,
-              minHeight: 100,
-              textAlignVertical: 'top'
+              padding: 20,
+              borderRadius: 18,
+              borderLeftWidth: 4,
+              borderLeftColor: '#3B82F6',
+              marginTop: 24
             }}
-            multiline
-            numberOfLines={4}
-            maxLength={500}
-          />
-          <Text style={{ 
-            fontSize: 11, 
-            color: colors.textMuted, 
-            marginTop: 4, 
-            textAlign: 'right' 
-          }}>
-            {notes.length}/500
-          </Text>
-        </PCard>
-
-        {/* Submit Button */}
-        <PButton 
-          title={loading ? "Booking..." : "Confirm Appointment"}
-          onPress={submit} 
-          loading={loading}
-          disabled={!selectedHospital || !selectedDepartment || !date || !!dateError || loading}
-        />
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: '#3B82F6',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12
+              }}>
+                <Ionicons name="time" size={20} color="#FFFFFF" />
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E40AF" }}>
+                Booking Information
+              </Text>
+            </View>
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 13, color: "#1E3A8A", lineHeight: 18, fontWeight: '500' }}>
+                • 24-hour advance booking required
+              </Text>
+              <Text style={{ fontSize: 13, color: "#1E3A8A", lineHeight: 18, fontWeight: '500' }}>
+                • Available hours: 8:00 AM - 8:00 PM
+              </Text>
+              <Text style={{ fontSize: 13, color: "#1E3A8A", lineHeight: 18, fontWeight: '500' }}>
+                • Maximum booking window: 3 months
+              </Text>
+              <Text style={{ fontSize: 13, color: "#1E3A8A", lineHeight: 18, fontWeight: '500' }}>
+                • Free cancellation up to 12 hours before
+              </Text>
+            </View>
+          </LinearGradient>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

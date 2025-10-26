@@ -1,5 +1,5 @@
 // healthsystem-app/app/screens/AppointmentsScreen.js
-// FIXED: Modal buttons now visible + improved timezone handling
+// ENHANCED: Modern UI matching dashboard design
 
 import React, { useEffect, useState } from "react";
 import { 
@@ -14,14 +14,18 @@ import {
   ScrollView,
   SafeAreaView,
   Platform,
-  StatusBar
+  StatusBar,
+  Dimensions
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from "@expo/vector-icons";
 import PCard from "../../src/components/PCard";
 import PButton from "../../src/components/PButton";
 import colors from "../../src/constants/colors";
 import client from "../../src/api/client";
+
+const { width } = Dimensions.get('window');
 
 // Normalize dates to minute precision to avoid timezone issues
 const normalizeDate = (date) => {
@@ -30,7 +34,7 @@ const normalizeDate = (date) => {
   return normalized;
 };
 
-export default function AppointmentsScreen() {
+export default function AppointmentsScreen({ navigation }) {
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,12 +57,12 @@ export default function AppointmentsScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const FILTERS = [
-    { id: 'ALL', label: 'All', icon: 'list' },
-    { id: 'BOOKED', label: 'Booked', icon: 'calendar' },
-    { id: 'CONFIRMED', label: 'Confirmed', icon: 'checkmark-circle' },
-    { id: 'COMPLETED', label: 'Completed', icon: 'checkmark-done' },
-    { id: 'CANCELLED', label: 'Cancelled', icon: 'close-circle' },
-    { id: 'UPCOMING', label: 'Upcoming', icon: 'time' }
+    { id: 'ALL', label: 'All', icon: 'list', color: colors.primary },
+    { id: 'BOOKED', label: 'Booked', icon: 'calendar', color: '#7B61FF' },
+    { id: 'CONFIRMED', label: 'Confirmed', icon: 'checkmark-circle', color: '#F59E0B' },
+    { id: 'COMPLETED', label: 'Completed', icon: 'checkmark-done', color: '#22C55E' },
+    { id: 'CANCELLED', label: 'Cancelled', icon: 'close-circle', color: '#EF4444' },
+    { id: 'UPCOMING', label: 'Upcoming', icon: 'time', color: '#8B5CF6' }
   ];
 
   const loadAppointments = async (showRefresh = false) => {
@@ -117,13 +121,13 @@ export default function AppointmentsScreen() {
   const getStatusColor = (status) => {
     switch (status) {
       case "BOOKED":
-        return colors.primary;
+        return '#7B61FF';
       case "COMPLETED":
-        return colors.success;
+        return '#22C55E';
       case "CANCELLED":
-        return colors.danger;
+        return '#EF4444';
       case "CONFIRMED":
-        return colors.warning;
+        return '#F59E0B';
       default:
         return colors.textMuted;
     }
@@ -339,241 +343,238 @@ export default function AppointmentsScreen() {
     const canModify = item.status === "BOOKED" && !isPast;
 
     return (
-      <PCard style={{ marginBottom: 16, padding: 16 }}>
-        {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ 
-              fontSize: 18, 
-              fontWeight: "800", 
-              color: colors.text,
-              marginBottom: 4 
-            }}>
-              {hospitalName}
-            </Text>
-            <Text style={{ 
-              fontSize: 14, 
-              color: colors.textMuted,
-              marginBottom: 8 
-            }}>
-              {departmentName}
-            </Text>
-          </View>
-          
-          {/* Status Badge */}
-          <View style={{ 
-            backgroundColor: `${statusColor}15`,
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 16,
+      <TouchableOpacity 
+        activeOpacity={0.9}
+        onPress={() => {/* Could navigate to appointment details */}}
+      >
+        <LinearGradient
+          colors={["#FFFFFF", "#F9F7FF"]}
+          style={{
+            borderRadius: 20,
+            padding: 20,
+            marginBottom: 16,
             borderWidth: 1,
-            borderColor: statusColor
-          }}>
-            <Text style={{ 
-              fontSize: 12, 
-              fontWeight: "600", 
-              color: statusColor 
-            }}>
-              {statusText}
-            </Text>
-          </View>
-        </View>
-
-        {/* Date & Time */}
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          marginTop: 12,
-          padding: 12,
-          backgroundColor: `${colors.primary}08`,
-          borderRadius: 8
-        }}>
-          <Ionicons name="calendar-outline" size={20} color={colors.primary} style={{ marginRight: 12 }} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>{date}</Text>
-            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>{time}</Text>
-          </View>
-          {isPast && (
-            <View style={{ 
-              backgroundColor: colors.textMuted, 
-              paddingHorizontal: 8, 
-              paddingVertical: 4, 
-              borderRadius: 8 
-            }}>
-              <Text style={{ fontSize: 10, color: colors.white, fontWeight: "600" }}>PAST</Text>
+            borderColor: '#E8E0FF',
+            shadowColor: statusColor,
+            shadowOpacity: 0.08,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 4
+          }}
+        >
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ 
+                fontSize: 18, 
+                fontWeight: "800", 
+                color: colors.text,
+                marginBottom: 4 
+              }}>
+                {hospitalName}
+              </Text>
+              <Text style={{ 
+                fontSize: 14, 
+                color: colors.textMuted,
+                marginBottom: 8 
+              }}>
+                {departmentName}
+              </Text>
             </View>
-          )}
-        </View>
+            
+            {/* Status Badge */}
+            <View style={{ 
+              backgroundColor: `${statusColor}15`,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: statusColor
+            }}>
+              <Text style={{ 
+                fontSize: 12, 
+                fontWeight: "700", 
+                color: statusColor,
+                letterSpacing: 0.5
+              }}>
+                {statusText}
+              </Text>
+            </View>
+          </View>
 
-        {/* Doctor Info */}
-        {item.doctor && (
+          {/* Date & Time */}
           <View style={{ 
             flexDirection: 'row', 
             alignItems: 'center', 
-            marginTop: 12,
-            paddingVertical: 8
+            marginBottom: 16,
+            padding: 16,
+            backgroundColor: '#F0EDFF',
+            borderRadius: 16
           }}>
-            <View style={{ 
-              width: 32, 
-              height: 32, 
-              borderRadius: 16, 
+            <View style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
               backgroundColor: colors.primary,
               justifyContent: 'center',
               alignItems: 'center',
-              marginRight: 12
+              marginRight: 14
             }}>
-              <Text style={{ color: colors.white, fontWeight: '600', fontSize: 14 }}>
-                {item.doctor.fullName?.charAt(0) || 'D'}
-              </Text>
+              <Ionicons name="calendar" size={24} color="#FFFFFF" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>
-                Dr. {item.doctor.fullName || "Doctor"}
+              <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 3, fontWeight: '500' }}>
+                Scheduled for
               </Text>
-              {item.doctor.specialization && (
-                <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                  {item.doctor.specialization}
-                </Text>
-              )}
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.text }}>
+                {date}
+              </Text>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.primary, marginTop: 2 }}>
+                {time}
+              </Text>
             </View>
+            {isPast && (
+              <View style={{ 
+                backgroundColor: colors.textMuted, 
+                paddingHorizontal: 8, 
+                paddingVertical: 4, 
+                borderRadius: 8 
+              }}>
+                <Text style={{ fontSize: 10, color: colors.white, fontWeight: "700" }}>PAST</Text>
+              </View>
+            )}
           </View>
-        )}
 
-        {/* Appointment Number */}
-        {item.appointmentNumber && (
-          <View style={{ marginTop: 8 }}>
-            <Text style={{ fontSize: 12, color: colors.textMuted }}>
-              Appointment No: {item.appointmentNumber}
-            </Text>
-          </View>
-        )}
+          {/* Doctor Info */}
+          {item.doctor && (
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              marginBottom: 16,
+              padding: 12,
+              backgroundColor: `${colors.primary}05`,
+              borderRadius: 12
+            }}>
+              <View style={{ 
+                width: 40, 
+                height: 40, 
+                borderRadius: 20, 
+                backgroundColor: colors.primary,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12
+              }}>
+                <Text style={{ color: colors.white, fontWeight: '700', fontSize: 16 }}>
+                  {item.doctor.fullName?.charAt(0) || 'D'}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.text }}>
+                  Dr. {item.doctor.fullName || "Doctor"}
+                </Text>
+                {item.doctor.specialization && (
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                    {item.doctor.specialization}
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
 
-        {/* Actions */}
-        {canModify && (
-          <View style={{ marginTop: 16, flexDirection: 'row', gap: 12 }}>
-            <PButton 
-              title="Cancel" 
-              type="outline" 
-              onPress={() => handleCancel(item._id, hospitalName, item.date)} 
-              style={{ flex: 1 }}
-              loading={cancellingId === item._id}
-              disabled={cancellingId !== null || rescheduling}
-              textStyle={{ color: colors.danger }}
-            />
-            <PButton 
-              title="Reschedule" 
-              type="primary" 
-              onPress={() => handleReschedule(item._id, hospitalName, item.date)}
-              style={{ flex: 1 }}
-              disabled={cancellingId !== null || rescheduling}
-            />
-          </View>
-        )}
-      </PCard>
+          {/* Appointment Number */}
+          {item.appointmentNumber && (
+            <View style={{ marginBottom: 16, flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="receipt" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                Appointment No: <Text style={{ fontWeight: '700', color: colors.text }}>{item.appointmentNumber}</Text>
+              </Text>
+            </View>
+          )}
+
+          {/* Actions */}
+          {canModify && (
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => handleCancel(item._id, hospitalName, item.date)} 
+                disabled={cancellingId !== null || rescheduling}
+                style={{
+                  flex: 1,
+                  borderWidth: 1.5,
+                  borderColor: '#EF4444',
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  backgroundColor: `${colors.danger}05`,
+                  opacity: (cancellingId !== null || rescheduling) ? 0.5 : 1
+                }}
+              >
+                {cancellingId === item._id ? (
+                  <ActivityIndicator size="small" color="#EF4444" />
+                ) : (
+                  <Text style={{ 
+                    fontSize: 14, 
+                    fontWeight: "700", 
+                    color: '#EF4444' 
+                  }}>
+                    Cancel
+                  </Text>
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={() => handleReschedule(item._id, hospitalName, item.date)}
+                disabled={cancellingId !== null || rescheduling}
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.primary,
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  shadowColor: colors.primary,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 4,
+                  opacity: (cancellingId !== null || rescheduling) ? 0.5 : 1
+                }}
+              >
+                <Text style={{ 
+                  fontSize: 14, 
+                  fontWeight: "700", 
+                  color: colors.white 
+                }}>
+                  Reschedule
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
     );
   };
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 16, color: colors.textMuted }}>Loading appointments...</Text>
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F8F7FF' }} edges={['bottom']}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F8F7FF" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 16, color: colors.textMuted, fontSize: 14 }}>Loading appointments...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView 
-      style={{ 
-        flex: 1, 
-        backgroundColor: colors.background,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 6 : 0
-      }}
-    >
-      {/* Header with Filter */}
-      <View style={{ 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        padding: 16,
-        paddingBottom: 8
-      }}>
-        <View>
-          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.text }}>
-            Appointments
-          </Text>
-          <Text style={{ fontSize: 14, color: colors.textMuted, marginTop: 4 }}>
-            {filteredItems.length} {activeFilter === 'ALL' ? 'total' : activeFilter.toLowerCase()}
-          </Text>
-        </View>
-        
-        <TouchableOpacity
-          onPress={() => setShowFilterMenu(!showFilterMenu)}
-          style={{
-            backgroundColor: colors.primary,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderRadius: 12,
-            flexDirection: 'row',
-            alignItems: 'center'
-          }}
-        >
-          <Ionicons name="filter" size={18} color={colors.white} />
-          <Text style={{ color: colors.white, marginLeft: 8, fontWeight: "600" }}>
-            Filter
-          </Text>
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8F7FF' }} edges={['bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F7FF" />
 
-      {/* Filter Menu */}
-      {showFilterMenu && (
-        <View style={{ 
-          backgroundColor: colors.white, 
-          margin: 16,
-          marginTop: 0,
-          borderRadius: 12,
-          padding: 8,
-          shadowColor: "#000",
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 4
-        }}>
-          {FILTERS.map((filter) => (
-            <TouchableOpacity
-              key={filter.id}
-              onPress={() => handleFilterChange(filter.id)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                padding: 12,
-                borderRadius: 8,
-                backgroundColor: activeFilter === filter.id ? `${colors.primary}15` : 'transparent'
-              }}
-            >
-              <Ionicons 
-                name={filter.icon} 
-                size={20} 
-                color={activeFilter === filter.id ? colors.primary : colors.textMuted} 
-              />
-              <Text style={{ 
-                marginLeft: 12, 
-                fontSize: 14,
-                fontWeight: activeFilter === filter.id ? "600" : "400",
-                color: activeFilter === filter.id ? colors.primary : colors.text
-              }}>
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      <FlatList
-        data={filteredItems}
-        keyExtractor={(item) => item._id}
-        renderItem={renderAppointmentItem}
-        contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+          paddingBottom: 100,
+        }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -582,36 +583,173 @@ export default function AppointmentsScreen() {
             tintColor={colors.primary}
           />
         }
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', marginTop: 80, paddingHorizontal: 40 }}>
-            <Ionicons name="calendar-outline" size={64} color={colors.textMuted} />
-            <Text style={{ 
-              fontSize: 18, 
-              fontWeight: "600", 
-              color: colors.text, 
-              marginTop: 16,
-              marginBottom: 8,
-              textAlign: 'center'
-            }}>
-              No {activeFilter === 'ALL' ? '' : activeFilter.toLowerCase()} appointments
-            </Text>
-            <Text style={{ 
-              fontSize: 14, 
-              color: colors.textMuted, 
-              textAlign: 'center',
-              lineHeight: 20
-            }}>
-              {activeFilter === 'ALL' 
-                ? "You don't have any appointments yet. Book your first appointment to get started."
-                : `You don't have any ${activeFilter.toLowerCase()} appointments.`
-              }
-            </Text>
+      >
+        {/* Header Section */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10 }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 25,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: '#E8E0FF',
+            shadowColor: colors.primary,
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: '#F0EDFF',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 16
+              }}>
+                <Ionicons name="calendar" size={28} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 4 }}>
+                  My Appointments
+                </Text>
+                <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '500' }}>
+                  {filteredItems.length} {activeFilter === 'ALL' ? 'total' : activeFilter.toLowerCase()} appointments
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Book')}
+                style={{
+                  backgroundColor: colors.primary,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  shadowColor: colors.primary,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 4
+                }}
+              >
+                <Ionicons name="add" size={18} color={colors.white} />
+                <Text style={{ color: colors.white, marginLeft: 6, fontWeight: "700", fontSize: 14 }}>
+                  New
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        }
-        showsVerticalScrollIndicator={false}
-      />
+        </View>
 
-      {/* Reschedule Modal - FIXED BUTTONS */}
+        {/* Filter Tabs */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={{ paddingHorizontal: 20, marginBottom: 16 }}
+          contentContainerStyle={{ paddingRight: 20 }}
+        >
+          {FILTERS.map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              onPress={() => handleFilterChange(filter.id)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderRadius: 20,
+                backgroundColor: activeFilter === filter.id ? filter.color : colors.white,
+                marginRight: 8,
+                borderWidth: 1,
+                borderColor: activeFilter === filter.id ? filter.color : colors.border,
+                shadowColor: filter.color,
+                shadowOpacity: activeFilter === filter.id ? 0.15 : 0,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 2 },
+                elevation: activeFilter === filter.id ? 3 : 0
+              }}
+            >
+              <Ionicons 
+                name={filter.icon} 
+                size={16} 
+                color={activeFilter === filter.id ? colors.white : colors.textMuted} 
+              />
+              <Text style={{
+                fontSize: 13,
+                fontWeight: '700',
+                color: activeFilter === filter.id ? colors.white : colors.text,
+                marginLeft: 6
+              }}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Appointments List */}
+        <View style={{ padding: 20, paddingTop: 0 }}>
+          {filteredItems.length > 0 ? (
+            filteredItems.map((item) => (
+              <View key={item._id}>
+                {renderAppointmentItem({ item })}
+              </View>
+            ))
+          ) : (
+            <View style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 20,
+              padding: 40,
+              alignItems: 'center',
+              borderWidth: 2,
+              borderColor: '#F0EDFF',
+              borderStyle: 'dashed'
+            }}>
+              <View style={{
+                width: 100,
+                height: 100,
+                borderRadius: 50,
+                backgroundColor: '#F0EDFF',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 20
+              }}>
+                <Ionicons name="calendar-outline" size={48} color={colors.primary} />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: 8, textAlign: 'center' }}>
+                No Appointments Found
+              </Text>
+              <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
+                {activeFilter === 'ALL' 
+                  ? "You don't have any appointments yet. Book your first appointment to get started."
+                  : `You don't have any ${activeFilter.toLowerCase()} appointments.`
+                }
+              </Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Book')}
+                style={{
+                  backgroundColor: colors.primary,
+                  paddingHorizontal: 28,
+                  paddingVertical: 14,
+                  borderRadius: 25,
+                  shadowColor: colors.primary,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 5
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: "700" }}>
+                  Book Appointment
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Reschedule Modal */}
       <Modal
         visible={rescheduleModal.visible}
         transparent={true}
@@ -624,20 +762,21 @@ export default function AppointmentsScreen() {
           justifyContent: 'center',
           padding: 20
         }}>
-          <View style={{
-            backgroundColor: colors.white,
-            borderRadius: 20,
-            padding: 20,
-            maxHeight: '80%',
-            shadowColor: "#000",
-            shadowOpacity: 0.25,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: 10 },
-            elevation: 10
-          }}>
+          <LinearGradient
+            colors={["#FFFFFF", "#F9F7FF"]}
+            style={{
+              borderRadius: 24,
+              padding: 24,
+              shadowColor: "#7B61FF",
+              shadowOpacity: 0.25,
+              shadowRadius: 20,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 10
+            }}
+          >
             <Text style={{
-              fontSize: 20,
-              fontWeight: '700',
+              fontSize: 22,
+              fontWeight: '800',
               color: colors.text,
               marginBottom: 8
             }}>
@@ -645,7 +784,7 @@ export default function AppointmentsScreen() {
             </Text>
             
             <Text style={{
-              fontSize: 14,
+              fontSize: 15,
               color: colors.textMuted,
               marginBottom: 20
             }}>
@@ -653,11 +792,16 @@ export default function AppointmentsScreen() {
             </Text>
 
             {/* Current Date */}
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>
+            <View style={{ 
+              marginBottom: 20,
+              padding: 16,
+              backgroundColor: '#F0EDFF',
+              borderRadius: 16
+            }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, fontWeight: '500' }}>
                 Current Date & Time
               </Text>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.text }}>
                 {rescheduleModal.currentDate.toLocaleString('en-US', {
                   weekday: 'short',
                   year: 'numeric',
@@ -671,14 +815,14 @@ export default function AppointmentsScreen() {
 
             {/* New Date */}
             <View style={{ marginBottom: 20 }}>
-              <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 8 }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 8, fontWeight: '500' }}>
                 New Date & Time *
               </Text>
               <TouchableOpacity
                 style={{
                   borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 12,
+                  borderColor: colors.primary,
+                  borderRadius: 16,
                   padding: 16,
                   backgroundColor: colors.background,
                   flexDirection: 'row',
@@ -687,31 +831,37 @@ export default function AppointmentsScreen() {
                 }}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Text style={{ color: colors.text, fontSize: 14, flex: 1 }}>
-                  {newDate.toLocaleString('en-US', {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </Text>
-                <Ionicons name="calendar" size={20} color={colors.primary} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <Ionicons name="calendar" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                  <Text style={{ color: colors.text, fontSize: 15, flex: 1 }}>
+                    {newDate.toLocaleString('en-US', {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color={colors.primary} />
               </TouchableOpacity>
             </View>
 
             {/* Info Message */}
             <View style={{ 
               backgroundColor: '#FFF3CD', 
-              padding: 12, 
-              borderRadius: 8, 
-              marginBottom: 20,
+              padding: 16, 
+              borderRadius: 12, 
+              marginBottom: 24,
               borderLeftWidth: 4,
-              borderLeftColor: '#F59E0B'
+              borderLeftColor: '#F59E0B',
+              flexDirection: 'row',
+              alignItems: 'flex-start'
             }}>
-              <Text style={{ fontSize: 12, color: '#856404', lineHeight: 18 }}>
-                ⓘ New appointment must be at least 24 hours from now and between 8:00 AM - 8:00 PM
+              <Ionicons name="information-circle" size={20} color="#F59E0B" style={{ marginRight: 8, marginTop: 2 }} />
+              <Text style={{ fontSize: 13, color: '#856404', lineHeight: 18, flex: 1 }}>
+                New appointment must be at least 24 hours from now and between 8:00 AM - 8:00 PM
               </Text>
             </View>
 
@@ -730,11 +880,10 @@ export default function AppointmentsScreen() {
               />
             )}
 
-            {/* Buttons - FIXED: Made them visible */}
+            {/* Buttons */}
             <View style={{ 
               flexDirection: 'row', 
-              gap: 12,
-              marginTop: 8
+              gap: 12
             }}>
               <TouchableOpacity
                 onPress={closeRescheduleModal}
@@ -743,9 +892,8 @@ export default function AppointmentsScreen() {
                   flex: 1,
                   borderWidth: 1.5,
                   borderColor: colors.primary,
-                  borderRadius: 12,
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
+                  borderRadius: 16,
+                  paddingVertical: 16,
                   alignItems: 'center',
                   opacity: rescheduling ? 0.5 : 1
                 }}
@@ -765,10 +913,14 @@ export default function AppointmentsScreen() {
                 style={{
                   flex: 1,
                   backgroundColor: colors.primary,
-                  borderRadius: 12,
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
+                  borderRadius: 16,
+                  paddingVertical: 16,
                   alignItems: 'center',
+                  shadowColor: colors.primary,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 4,
                   opacity: rescheduling ? 0.5 : 1
                 }}
               >
@@ -785,7 +937,7 @@ export default function AppointmentsScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
+          </LinearGradient>
         </View>
       </Modal>
     </SafeAreaView>
