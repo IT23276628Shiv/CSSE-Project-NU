@@ -50,7 +50,7 @@ describe("ViewPatients", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Patient Details")).toBeInTheDocument();
-      expect(screen.getByText("HC123")).toBeInTheDocument();
+      expect(screen.getAllByText("HC123")[0]).toBeInTheDocument();
     });
   });
 });
